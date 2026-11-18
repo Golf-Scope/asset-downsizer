@@ -1,0 +1,672 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asset Downsizer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&family=Kanit:ital,wght@1,700&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one centered working column on the GOLF+ graphite ground — controls, a big glass drop zone, then the results panel.
+   Tokens follow the GOLF+ Web Design System (colors_and_type.css). The system is dark-only, so the page commits to one dark look. */
+:root {
+  --gp-white: rgb(255, 255, 255);
+  --gp-white-70: rgba(255, 255, 255, 0.7);
+  --gp-white-50: rgba(255, 255, 255, 0.5);
+  --gp-white-30: rgba(255, 255, 255, 0.3);
+  --gp-white-15: rgba(255, 255, 255, 0.15);
+  --gp-white-10: rgba(255, 255, 255, 0.10);
+  --gp-white-05: rgba(255, 255, 255, 0.05);
+  --gp-black: rgb(0, 0, 0);
+  --gp-ink: rgb(23, 24, 27);
+  --gp-pearl: rgb(222, 228, 241);
+  --gp-graphite-hi: rgb(58, 62, 72);
+  --gp-graphite-lo: rgb(41, 44, 51);
+  --gp-blue-wash: rgba(0, 87, 255, 0.04);
+  --gp-green: rgb(83, 187, 0);
+  --gp-green-300: rgb(116, 255, 155); /* #74FF9B — Color/Green/300, the Text/Green style in the Figma Web library */
+  --accent: var(--gp-green-300);
+  --gp-neon: rgb(115, 255, 5);
+  --gp-orange: rgb(255, 169, 40);
+  --gp-red: rgb(255, 108, 108);
+
+  --fg1: var(--gp-white);
+  --fg2: var(--gp-white-70);
+  --fg3: var(--gp-white-50);
+  --border-hairline: var(--gp-white-15);
+  --border-edge: rgba(255, 255, 255, 0.5);
+  --overlay: rgba(28, 30, 36, 0.9);
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+  --shadow-pill: 0px 12px 24px 0px rgba(0, 0, 0, 0.1);
+
+  --font-sans: "Urbanist", "Spartan", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Kanit", "Urbanist", sans-serif;
+  --font-mono: "Red Hat Mono", ui-monospace, Menlo, monospace;
+
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+/* Figma "main panel" background (Design Updates, node 1223:51542):
+   radial gradient from the top center reaching the full width and height of the window,
+   plus a rgba(0,87,255,0.08) layer in Color blend mode. */
+html { min-height: 100%; background: rgb(22, 22, 22); }
+body {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(0, 87, 255, 0.08), rgba(0, 87, 255, 0.08)),
+    radial-gradient(100% 100% at 50% 0%, rgb(68, 68, 68) 0%, rgb(45, 45, 45) 50%, rgb(22, 22, 22) 100%);
+  background-blend-mode: color, normal;
+  background-color: rgb(22, 22, 22);
+  background-attachment: fixed;
+  background-size: 100% 100%;
+  color: var(--fg1);
+  font-family: var(--font-sans); font-weight: 500; font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+.wrap {
+  max-width: 880px; margin: 0 auto;
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 24px;
+}
+header h1 {
+  font-family: var(--font-display); font-style: italic; font-weight: 700;
+  font-size: 30px; line-height: 1.3; letter-spacing: 0.02em; text-transform: uppercase;
+  margin: 0 0 4px; text-wrap: balance;
+}
+header p { margin: 0; color: var(--fg2); max-width: 62ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+.label { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--fg2); margin-bottom: 8px; }
+
+/* Segmented control: pill outer, pearl selected segment with black text */
+.seg {
+  display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--radius-pill);
+  background: var(--gp-white-10); backdrop-filter: blur(43px); -webkit-backdrop-filter: blur(43px);
+}
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label {
+  padding: 8px 16px; line-height: 20px; border-radius: var(--radius-pill); cursor: pointer;
+  font-weight: 700; font-size: 15px; color: var(--fg2); transition: color .15s ease-out;
+}
+.seg label:hover { color: var(--fg1); }
+.seg input:checked + label { background: var(--gp-pearl); color: var(--gp-black); box-shadow: var(--shadow-pill); }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Checkbox: 20×20, 4px radius, 2px white stroke; checked fills white with a black check */
+.toggle { display: flex; gap: 10px; align-items: center; cursor: pointer; font-size: 16px; font-weight: 600; height: 44px; }
+.toggle small { color: var(--fg3); font-weight: 500; font-size: 14px; }
+.toggle input {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+  width: 20px; height: 20px; border: 2px solid var(--gp-white); border-radius: var(--radius-xs);
+  display: grid; place-content: center; cursor: pointer; background: transparent;
+}
+.toggle input::after {
+  content: ""; width: 10px; height: 6px; border-left: 2px solid var(--gp-black); border-bottom: 2px solid var(--gp-black);
+  transform: rotate(-45deg) translate(1px, -1px); opacity: 0;
+}
+.toggle input:checked { background: var(--gp-white); }
+.toggle input:checked::after { opacity: 1; }
+.toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Drop zone: glass card */
+.drop {
+  border: 2px dashed var(--gp-white-30); border-radius: var(--radius-lg);
+  background: var(--gp-white-05); backdrop-filter: blur(192px); -webkit-backdrop-filter: blur(192px);
+  padding: 56px 20px; min-height: 260px; text-align: center; cursor: pointer;
+  display: grid; gap: 8px; justify-items: center; align-content: center;
+  transition: border-color .2s ease-out, background .2s ease-out;
+}
+.drop:hover { border-color: var(--gp-white-70); background: var(--gp-white-10); }
+/* Focus ring only for keyboard users; a mouse click that opens the file picker leaves no outline behind */
+.drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drop svg { width: 48px; height: 48px; color: var(--accent); margin-bottom: 8px; }
+.drop strong { font-family: var(--font-sans); font-weight: 700; font-size: 20px; }
+.drop span { color: var(--fg2); font-size: 15px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.page-drop {
+  position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  background: var(--overlay); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  display: grid;
+}
+.page-drop[hidden] { display: none; }
+.page-drop > div {
+  border: 3px dashed var(--accent); border-radius: var(--radius-lg);
+  display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center;
+}
+.page-drop svg { width: 64px; height: 64px; color: var(--accent); }
+.page-drop strong { font-family: var(--font-display); font-style: italic; font-size: 36px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.page-drop span { color: var(--fg2); }
+
+/* Results */
+.results { display: grid; gap: 12px; margin-top: 8px; }
+.toast:empty { display: none; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+.bar .summary { color: var(--fg2); font-size: 15px; font-variant-numeric: tabular-nums; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+button {
+  font-family: var(--font-sans); font-size: 15px; font-weight: 700; cursor: pointer;
+  padding: 9px 18px; border-radius: var(--radius-pill);
+  border: 1px solid var(--gp-white-15); background: var(--gp-white-10); color: var(--fg1);
+  transition: background .15s ease-out;
+}
+button:hover:not(:disabled) { background: var(--gp-white-15); }
+button:active:not(:disabled) { background: var(--gp-white-30); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .4; cursor: default; }
+/* Primary pill: pearl fill, soft-glass edge, black uppercase label */
+button.primary {
+  background: var(--gp-pearl); color: var(--gp-ink); text-transform: uppercase;
+  border: 1px solid var(--gp-white-15); background-clip: padding-box;
+  box-shadow: var(--shadow-pill); padding: 9px 20px;
+}
+button.primary:hover:not(:disabled) { background: var(--gp-white); background-clip: padding-box; }
+
+.list {
+  display: grid; background: var(--gp-white-05); backdrop-filter: blur(192px); -webkit-backdrop-filter: blur(192px);
+  border: 1px solid var(--border-hairline); border-radius: var(--radius-lg); overflow: hidden;
+}
+.row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px; border-top: 1px solid var(--border-hairline); transition: background .15s ease-out; }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--gp-white-05); }
+.row.latest { background: rgba(116, 255, 155, 0.07); }
+.thumb {
+  width: 72px; height: 72px; border-radius: var(--radius-sm); display: grid; place-items: center; overflow: hidden;
+  background-color: var(--gp-white-05);
+  background-image: linear-gradient(45deg, var(--gp-white-10) 25%, transparent 25%, transparent 75%, var(--gp-white-10) 75%), linear-gradient(45deg, var(--gp-white-10) 25%, transparent 25%, transparent 75%, var(--gp-white-10) 75%);
+  background-size: 12px 12px; background-position: 0 0, 6px 6px;
+  border: 1px solid var(--border-hairline);
+}
+.thumb img { max-width: 100%; max-height: 100%; }
+.meta { min-width: 0; display: grid; gap: 4px; }
+.names { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.dims { font-size: 14px; color: var(--fg3); font-variant-numeric: tabular-nums; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-xs);
+  background: var(--gp-white-10); color: var(--fg2);
+}
+.chip.new { background: rgba(116, 255, 155, 0.15); color: var(--accent); text-transform: uppercase; }
+.chip.warn { background: rgba(255, 169, 40, 0.15); color: var(--gp-orange); }
+.chip.err { background: rgba(255, 108, 108, 0.15); color: var(--gp-red); }
+.chip.neutral { background: transparent; color: var(--fg3); border: 1px solid var(--border-hairline); }
+
+.rowbtn { display: flex; gap: 8px; align-items: center; }
+.names .arrow { color: var(--fg3); padding: 0 6px; font-weight: 500; }
+.modal {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  background: rgba(10, 11, 14, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.modal-card {
+  width: min(420px, 100%); display: grid; gap: 4px; padding: 24px;
+  background: rgb(41, 44, 51); border: 1px solid var(--border-hairline); border-radius: var(--radius-lg);
+  box-shadow: 0px 24px 48px 0px rgba(0, 0, 0, 0.4);
+}
+.modal-card h2 { margin: 0 0 12px; font-size: 20px; font-weight: 700; }
+.modal-card .namefield { width: 100%; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.namefield {
+  display: flex; align-items: center; border: 1px solid var(--border-hairline); border-radius: var(--radius-sm);
+  background: var(--gp-white-05); overflow: hidden; width: 210px; min-width: 0;
+}
+.namefield:focus-within { border-color: var(--accent); }
+.namefield input {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg1);
+  font-family: var(--font-mono); font-size: 14px; padding: 9px 0 9px 12px; outline: none;
+}
+.namefield span { font-family: var(--font-mono); font-size: 14px; color: var(--fg3); padding-right: 12px; }
+
+.notes { color: var(--fg2); font-size: 15px; display: grid; gap: 8px; max-width: 66ch; }
+.notes h2 { font-size: 18px; font-weight: 700; text-transform: uppercase; color: var(--fg1); margin: 8px 0 0; }
+.notes ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.notes code { font-family: var(--font-mono); font-size: 13px; color: var(--fg1); background: var(--gp-white-10); border-radius: var(--radius-xs); padding: 1px 5px; }
+.help { color: var(--fg2); font-size: 15px; max-width: 66ch; }
+.help summary { cursor: pointer; font-weight: 700; color: var(--fg2); width: fit-content; list-style: none; display: flex; align-items: center; gap: 6px; transition: color .15s ease-out; }
+.help summary::-webkit-details-marker { display: none; }
+.help summary::before { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; }
+.help[open] summary::before { transform: rotate(45deg); }
+.help summary:hover { color: var(--fg1); }
+.help summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.help ol { margin: 10px 0 6px; padding-left: 20px; display: grid; gap: 4px; }
+.help p { margin: 0; color: var(--fg3); }
+.help code { font-family: var(--font-mono); font-size: 13px; color: var(--fg1); background: var(--gp-white-10); border-radius: var(--radius-xs); padding: 1px 5px; }
+.toast { font-size: 15px; color: var(--accent); }
+.toast.err { color: var(--gp-red); }
+
+@media (max-width: 560px) {
+  header h1 { font-size: 26px; }
+  .row { grid-template-columns: 56px minmax(0, 1fr); }
+  .thumb { width: 56px; height: 56px; }
+  .row .rowbtn { grid-column: 1 / -1; justify-self: stretch; }
+  .rowbtn .namefield { flex: 1; width: auto; }
+  .seg label { padding: 8px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main class="wrap">
+  <header>
+    <h1>Asset Downsizer</h1>
+    <p>Shrink high-res Figma exports back to 1x. File names ending in @2x, @3x or @4x have that suffix removed. Files stay on your computer.</p>
+  </header>
+
+  <section class="controls" aria-label="Resize settings">
+    <div>
+      <div class="label" id="scale-label">Exported at</div>
+      <div class="seg" role="radiogroup" aria-labelledby="scale-label">
+        <input type="radio" name="factor" id="f4" value="4" checked><label for="f4">4x → 1x</label>
+        <input type="radio" name="factor" id="f3" value="3"><label for="f3">3x → 1x</label>
+        <input type="radio" name="factor" id="f2" value="2"><label for="f2">2x → 1x</label>
+      </div>
+    </div>
+    <div>
+      <div class="label">Finish</div>
+      <label class="toggle"><input type="checkbox" id="sharpen" checked> Light sharpening</label>
+    </div>
+  </section>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file" multiple accept="image/png,image/jpeg,image/webp">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+    <strong>Drop images here, or click to choose</strong>
+    <span>PNG, JPG or WebP</span>
+  </label>
+
+  <section class="results" aria-label="Resized files">
+    <div class="bar">
+      <div class="summary" id="summary"></div>
+      <div class="actions">
+        <button type="button" id="clear">Clear</button>
+        <button type="button" class="primary" id="zip">Download all (.zip)</button>
+      </div>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </section>
+  <details class="help">
+    <summary>How it works</summary>
+    <ol>
+      <li>Export from Figma at <code>2x</code>, <code>3x</code> or <code>4x</code>.</li>
+      <li>Pick the size you exported at, then drop or paste the files here.</li>
+      <li>Rename if needed, then download one file or all of them as a zip.</li>
+    </ol>
+    <p>Images are resized with a Lanczos filter in your browser and never uploaded.</p>
+  </details>
+</main>
+
+<div class="modal" id="dlg" hidden>
+  <form class="modal-card" id="dlg-form" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <h2 id="dlg-title">Download</h2>
+    <label class="label" for="dlg-name">File name</label>
+    <div class="namefield">
+      <input type="text" id="dlg-name" spellcheck="false" autocomplete="off">
+      <span id="dlg-ext">.png</span>
+    </div>
+    <div class="modal-actions">
+      <button type="button" id="dlg-cancel">Cancel</button>
+      <button type="submit" class="primary">Download</button>
+    </div>
+  </form>
+</div>
+
+<div class="page-drop" id="pagedrop" hidden aria-hidden="true">
+  <div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+    <strong>Drop to resize</strong>
+    <span>Let go anywhere on the page</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pica/9.0.1/pica.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { factor: 4, sharpen: true, items: [] };
+  let nextId = 1;
+  let batchCount = 0;
+  let picaInst = null;
+  let downloadsNs;  // undefined = not asked yet, null = unavailable
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtBytes = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(2) + " MB";
+
+  function toast(msg, isErr) {
+    const t = $("toast"); t.textContent = msg || ""; t.className = "toast" + (isErr ? " err" : "");
+  }
+
+  function getPica(jsOnly) {
+    if (!window.pica) return null;
+    if (jsOnly) { picaInst = window.pica({ features: ["js"] }); return picaInst; }
+    if (!picaInst) {
+      try { picaInst = window.pica({ features: ["js", "wasm", "ww"] }); }
+      catch (e) { picaInst = window.pica({ features: ["js"] }); }
+    }
+    return picaInst;
+  }
+
+  // Fallback if pica fails to load: halve repeatedly with the browser's best smoothing.
+  function fallbackResize(img, dst) {
+    let cur = img, w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    while (w / 2 >= dst.width && h / 2 >= dst.height) {
+      const c = document.createElement("canvas");
+      c.width = Math.round(w / 2); c.height = Math.round(h / 2);
+      const ctx = c.getContext("2d"); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(cur, 0, 0, c.width, c.height);
+      cur = c; w = c.width; h = c.height;
+    }
+    const ctx = dst.getContext("2d"); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(cur, 0, 0, dst.width, dst.height);
+  }
+
+  async function resize(img, dst) {
+    const opts = { quality: 3, alpha: true };
+    if (state.sharpen) Object.assign(opts, { unsharpAmount: 70, unsharpRadius: 0.6, unsharpThreshold: 2 });
+    const p = getPica();
+    if (!p) { fallbackResize(img, dst); return "browser"; }
+    try { await p.resize(img, dst, opts); return "lanczos"; }
+    catch (e) {
+      try { await getPica(true).resize(img, dst, opts); return "lanczos"; }
+      catch (e2) { fallbackResize(img, dst); return "browser"; }
+    }
+  }
+
+  function outInfo(file) {
+    const t = file.type;
+    if (t === "image/jpeg") return { type: "image/jpeg", ext: "jpg" };
+    if (t === "image/webp") return { type: "image/webp", ext: "webp" };
+    return { type: "image/png", ext: "png" };
+  }
+
+  function outName(name, ext) {
+    let base = name.replace(/\.[^.]+$/, "");
+    base = base.replace(/[@_\-\s]?[234]x$/i, "");
+    return (base || "asset") + "." + ext;
+  }
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable")); };
+      img.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas, type) {
+    return new Promise((resolve, reject) => canvas.toBlob((b) => b ? resolve(b) : reject(new Error("encode")), type, 0.92));
+  }
+
+  async function processItem(item) {
+    item.status = "working"; render();
+    if (item.url) { URL.revokeObjectURL(item.url); item.url = null; }
+    const f = state.factor;
+    try {
+      const { img, url } = await loadImage(item.file);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const tw = Math.max(1, Math.round(w / f)), th = Math.max(1, Math.round(h / f));
+      const dst = document.createElement("canvas"); dst.width = tw; dst.height = th;
+      item.method = await resize(img, dst);
+      URL.revokeObjectURL(url);
+      const info = outInfo(item.file);
+      item.blob = await canvasToBlob(dst, info.type);
+      item.url = URL.createObjectURL(item.blob);
+      item.outName = outName(item.file.name, info.ext);
+      item.ext = info.ext;
+      item.defaultBase = item.outName.slice(0, -(info.ext.length + 1));
+      Object.assign(item, { w, h, tw, th, exact: w % f === 0 && h % f === 0, factorUsed: f, status: "done" });
+    } catch (e) {
+      item.status = "error";
+      item.error = "Couldn't read this file. Use a PNG, JPG or WebP image.";
+    }
+    render();
+  }
+
+  async function processAll(items) {
+    for (const it of items) await processItem(it);
+  }
+
+  function addFiles(fileList) {
+    const files = Array.from(fileList).filter((f) => f && (f.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(f.name)));
+    if (!files.length) { toast("Those weren't image files. Use PNG, JPG or WebP", true); return; }
+    toast("");
+    // Real files replace the example.
+    state.items.filter((i) => i.sample).forEach((i) => i.url && URL.revokeObjectURL(i.url));
+    state.items = state.items.filter((i) => !i.sample);
+    const batch = ++batchCount;
+    const addedAt = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const fresh = files.map((file) => ({ id: nextId++, file, status: "queued", batch, addedAt }));
+    state.latestBatch = batch;
+    state.items.unshift(...fresh);  // newest on top
+    render();
+    processAll(fresh);
+  }
+
+  // Clean a typed name: drop a typed extension and characters file systems refuse.
+  function cleanBase(raw, ext, fallback) {
+    let base = String(raw ?? "").trim();
+    base = base.replace(new RegExp("\\.(" + ext + "|png|jpe?g|webp|zip)$", "i"), "");
+    base = base.replace(/[\\/:*?"<>|]/g, "-").trim();
+    return base || fallback;
+  }
+  // The name the viewer chose (if any), with the output extension added.
+  function finalName(it) {
+    return cleanBase(it.customBase ?? it.defaultBase, it.ext, it.defaultBase || "asset") + "." + it.ext;
+  }
+
+  // Rename dialog shown when someone clicks Download. Resolves the chosen name, or null if cancelled.
+  let dlgResolve = null, dlgReturnFocus = null;
+  function askName(title, base, ext) {
+    $("dlg-title").textContent = title;
+    $("dlg-ext").textContent = "." + ext;
+    const input = $("dlg-name");
+    input.value = base;
+    dlgReturnFocus = document.activeElement;
+    $("dlg").hidden = false;
+    input.focus(); input.select();
+    return new Promise((resolve) => { dlgResolve = resolve; });
+  }
+  function closeDialog(value) {
+    $("dlg").hidden = true;
+    if (dlgReturnFocus && dlgReturnFocus.focus) dlgReturnFocus.focus();
+    const r = dlgResolve; dlgResolve = null;
+    if (r) r(value);
+  }
+  $("dlg-form").addEventListener("submit", (e) => { e.preventDefault(); closeDialog($("dlg-name").value); });
+  $("dlg-cancel").addEventListener("click", () => closeDialog(null));
+  $("dlg").addEventListener("click", (e) => { if (e.target === $("dlg")) closeDialog(null); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("dlg").hidden) closeDialog(null); });
+
+  function uniqueNames(items) {
+    const seen = {};
+    return items.map((it) => {
+      let n = finalName(it);
+      if (seen[n]) {
+        const dot = n.lastIndexOf(".");
+        let k = 2, cand;
+        do { cand = n.slice(0, dot) + "-" + k + n.slice(dot); k++; } while (seen[cand]);
+        n = cand;
+      }
+      seen[n] = true;
+      return n;
+    });
+  }
+
+  async function getDownloads() {
+    if (downloadsNs !== undefined) return downloadsNs;
+    try { downloadsNs = (window.claude && window.claude.use) ? await window.claude.use("downloads") : null; }
+    catch (e) { downloadsNs = null; }
+    return downloadsNs;
+  }
+
+  async function saveFile(filename, blob) {
+    const d = await getDownloads();
+    if (d) {
+      try { await d.save({ filename, data: blob }); toast("Saved " + filename); }
+      catch (e) {
+        if (e && e.code === "declined") toast("Download cancelled");
+        else if (e && e.code === "rate_limited") toast("A save prompt is already open. Finish that one first", true);
+        else toast("Couldn't save the file here. Right-click the preview and choose Save Image instead.", true);
+      }
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  function render() {
+    const list = $("list");
+    const items = state.items;
+    const done = items.filter((i) => i.status === "done");
+    const working = items.some((i) => i.status === "working" || i.status === "queued");
+    const real = items.filter((i) => !i.sample);
+    $("summary").textContent = `${done.length} of ${items.length} ready` + (working ? " · working…" : "");
+    // Nothing shows below the drop zone until there are files (error messages still can).
+    document.querySelector(".bar").hidden = !items.length;
+    $("zip").disabled = !done.length || working;
+    $("zip").textContent = done.length > 1 ? `Download all ${done.length} (.zip)` : "Download all (.zip)";
+    $("clear").disabled = !items.length;
+    list.hidden = !items.length;
+
+    // Keep the cursor in a name field while other rows finish and the list redraws.
+    const active = document.activeElement;
+    const focusId = active && active.dataset && active.dataset.name;
+    const sel = focusId ? [active.selectionStart, active.selectionEnd] : null;
+
+    list.innerHTML = items.map((it) => {
+      const chips = [];
+      const latest = !it.sample && it.batch === state.latestBatch && state.latestBatch > 1;
+      if (it.sample) chips.push('<span class="chip neutral">Example</span>');
+      if (latest) chips.push('<span class="chip new">Latest</span>');
+      if (it.status === "done") {
+        chips.push(`<span class="chip">÷${it.factorUsed}</span>`);
+        if (!it.exact) chips.push(`<span class="chip warn">Rounded to nearest px</span>`);
+      }
+      if (it.status === "working" || it.status === "queued") chips.push('<span class="chip neutral">Resizing…</span>');
+      if (it.status === "error") chips.push(`<span class="chip err">${esc(it.error)}</span>`);
+      const dims = it.status === "done"
+        ? `${it.w}×${it.h} → ${it.tw}×${it.th} px · ${fmtBytes(it.file.size)} → ${fmtBytes(it.blob.size)}`
+        : esc(fmtBytes(it.file.size));
+      const when = it.addedAt ? ` · added ${esc(it.addedAt)}` : "";
+      return `<div class="row${latest ? " latest" : ""}">
+        <div class="thumb">${it.url ? `<img src="${it.url}" alt="Resized ${esc(it.outName)}">` : ""}</div>
+        <div class="meta">
+          <div class="names">${esc(it.file.name)}</div>
+          <div class="dims">${dims}${when}</div>
+          <div class="chips">${chips.join("")}</div>
+        </div>
+        <div class="rowbtn">${it.status === "done" ? `
+          <label class="namefield" title="Name for the downloaded file">
+            <input type="text" id="name-${it.id}" data-name="${it.id}" value="${esc(it.customBase ?? it.defaultBase)}" aria-label="File name for ${esc(it.file.name)}" spellcheck="false" autocomplete="off">
+            <span>.${esc(it.ext)}</span>
+          </label>
+          <button type="button" data-dl="${it.id}">Download</button>` : ""}</div>
+      </div>`;
+    }).join("");
+
+    if (focusId) {
+      const el = document.getElementById("name-" + focusId);
+      if (el) { el.focus(); try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
+    }
+  }
+
+  $("list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dl]");
+    if (!b) return;
+    const it = state.items.find((i) => i.id === Number(b.dataset.dl));
+    if (!it || !it.blob) return;
+    askName("Download file", cleanBase(it.customBase ?? it.defaultBase, it.ext, it.defaultBase), it.ext).then((name) => {
+      if (name === null) return;
+      it.customBase = name; render();
+      saveFile(finalName(it), it.blob);
+    });
+  });
+  $("list").addEventListener("input", (e) => {
+    const id = e.target.dataset && e.target.dataset.name;
+    if (!id) return;
+    const it = state.items.find((i) => i.id === Number(id));
+    if (it) it.customBase = e.target.value;
+  });
+  $("list").addEventListener("keydown", (e) => {
+    const id = e.target.dataset && e.target.dataset.name;
+    if (!id || e.key !== "Enter") return;
+    e.preventDefault();
+    const it = state.items.find((i) => i.id === Number(id));
+    if (it && it.blob) saveFile(finalName(it), it.blob);
+  });
+
+  $("zip").addEventListener("click", async () => {
+    const done = state.items.filter((i) => i.status === "done");
+    if (!done.length) return;
+    if (!window.JSZip) { toast("The zip helper didn't load. Download the files one at a time.", true); return; }
+    const zip = new JSZip();
+    const names = uniqueNames(done);
+    done.forEach((it, i) => zip.file(names[i], it.blob));
+    const fallback = `assets-1x-${new Date().toISOString().slice(0, 10)}`;
+    const name = await askName("Download all", fallback, "zip");
+    if (name === null) return;
+    const blob = await zip.generateAsync({ type: "blob" });
+    saveFile(cleanBase(name, "zip", fallback) + ".zip", blob);
+  });
+
+  $("clear").addEventListener("click", () => {
+    state.items.forEach((i) => i.url && URL.revokeObjectURL(i.url));
+    state.items = []; toast(""); render();
+  });
+
+  // Let go of focus once the file picker closes, whether files were chosen or not.
+  $("file").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; e.target.blur(); });
+  $("file").addEventListener("cancel", (e) => e.target.blur());
+
+  // Dragging files anywhere over the page shows a full-page drop target; a drop anywhere is handled once, here.
+  const pageDrop = $("pagedrop");
+  let dragDepth = 0;
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+  const hideOverlay = () => { dragDepth = 0; pageDrop.hidden = true; };
+  window.addEventListener("dragenter", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth++; pageDrop.hidden = false;
+  });
+  window.addEventListener("dragleave", (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0 || !e.relatedTarget) hideOverlay();
+  });
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", (e) => {
+    e.preventDefault(); hideOverlay();
+    if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+  window.addEventListener("blur", hideOverlay);
+  window.addEventListener("paste", (e) => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (files.length) addFiles(files);
+  });
+
+  document.querySelectorAll('input[name="factor"]').forEach((r) => r.addEventListener("change", () => {
+    state.factor = Number(r.value);
+    if (state.items.length) processAll(state.items);
+  }));
+  $("sharpen").addEventListener("change", (e) => {
+    state.sharpen = e.target.checked;
+    if (state.items.length) processAll(state.items);
+  });
+
+  render();
+})();
+</script>
