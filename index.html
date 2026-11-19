@@ -146,6 +146,31 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .quality input[type="range"] { width: 96px; }
 .quality input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
+/* Quality help: "?" button with a tooltip of suggested values (hover, keyboard focus or tap) */
+.quality { position: relative; z-index: 5; }
+.qhelp {
+  width: 18px; height: 18px; padding: 0; flex: none; display: inline-grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--gp-white-30); background: transparent;
+  color: var(--fg2); font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle;
+}
+.qhelp:hover:not(:disabled), .qhelp[aria-expanded="true"] { background: var(--gp-white-15); color: var(--fg1); }
+.qtip {
+  position: absolute; left: 0; top: calc(100% + 8px); z-index: 20; width: min(280px, calc(100vw - 32px));
+  padding: 12px 14px; border-radius: 12px; background: rgb(28, 30, 36); border: 1px solid var(--gp-white-15);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35); color: var(--fg2); font-size: 13px; font-weight: 500;
+  line-height: 1.45; text-align: left; text-transform: none;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .15s ease-in-out, transform .15s ease-in-out, visibility .15s;
+}
+.qtip p { margin: 0 0 8px; color: var(--fg1); }
+.qtip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.qtip dt { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.qtip dd { margin: 0; }
+.qhelp-wrap:hover .qtip, .qhelp:focus-visible + .qtip, .qhelp[aria-expanded="true"] + .qtip {
+  opacity: 1; visibility: visible; transform: none;
+}
+@media (prefers-reduced-motion: reduce) { .qtip { transition: none; } }
+
 /* Drop zone: glass card */
 .drop {
   border: 2px dashed var(--gp-white-30); border-radius: var(--radius-lg);
@@ -315,6 +340,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
           <label for="quality">Quality</label>
           <input type="range" id="quality" min="0" max="100" step="1" value="50">
           <output id="quality-out" for="quality">50</output>
+          <span class="qhelp-wrap"><button type="button" class="qhelp" id="qhelp" aria-label="Which quality should I use?" aria-describedby="qtip" aria-expanded="false">?</button><span class="qtip" id="qtip" role="tooltip"><p>Higher keeps more detail but makes a bigger file.</p><dl><dt>50</dt><dd>Good default for most images</dd><dt>60–75</dt><dd>Text, icons, logos or fine detail</dd><dt>30–45</dt><dd>Large photos and backgrounds</dd></dl></span></span>
         </div>
       </div>
     </div>
@@ -746,6 +772,11 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     $("quality-wrap").hidden = state.format !== "avif";
     if (state.items.length) processAll(state.items);
   }));
+  // Quality help: tap or click toggles the tooltip; Escape or a click elsewhere closes it
+  const qhelp = $("qhelp");
+  qhelp.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); qhelp.setAttribute("aria-expanded", qhelp.getAttribute("aria-expanded") === "true" ? "false" : "true"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".qhelp-wrap")) qhelp.setAttribute("aria-expanded", "false"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") qhelp.setAttribute("aria-expanded", "false"); });
   $("quality").addEventListener("input", (e) => { $("quality-out").textContent = e.target.value; e.target.style.setProperty("--fill", e.target.value + "%"); });
   $("quality").addEventListener("change", (e) => {
     state.quality = Number(e.target.value);
