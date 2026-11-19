@@ -84,7 +84,7 @@ header h1 {
 }
 header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 
-.controls { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; }
 .label { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--fg2); margin-bottom: 8px; }
 
 /* Segmented control: pill outer, pearl selected segment with black text */
@@ -125,7 +125,7 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
   font-weight: 700; font-size: 15px; color: var(--fg2);
 }
 .quality output { color: var(--fg1); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
-.quality input[type="range"] { width: 120px; accent-color: var(--accent); cursor: pointer; }
+.quality input[type="range"] { width: 96px; accent-color: var(--accent); cursor: pointer; }
 .quality input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
 /* Drop zone: glass card */
@@ -277,9 +277,9 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     <div>
       <div class="label" id="scale-label">Exported at</div>
       <div class="seg" role="radiogroup" aria-labelledby="scale-label">
-        <input type="radio" name="factor" id="f4" value="4" checked><label for="f4">4x → 1x</label>
-        <input type="radio" name="factor" id="f3" value="3"><label for="f3">3x → 1x</label>
-        <input type="radio" name="factor" id="f2" value="2"><label for="f2">2x → 1x</label>
+        <input type="radio" name="factor" id="f4" value="4" checked><label for="f4">4x</label>
+        <input type="radio" name="factor" id="f3" value="3"><label for="f3">3x</label>
+        <input type="radio" name="factor" id="f2" value="2"><label for="f2">2x</label>
       </div>
     </div>
     <div>
