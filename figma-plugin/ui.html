@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset Downsizer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700&family=Kanit:ital,wght@1,700&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+/* Same GOLF+ tokens as the Asset Downsizer website, sized for a 380px plugin panel. */
+:root {
+  --gp-white-70: rgba(255, 255, 255, 0.7);
+  --gp-white-50: rgba(255, 255, 255, 0.5);
+  --gp-white-30: rgba(255, 255, 255, 0.3);
+  --gp-white-15: rgba(255, 255, 255, 0.15);
+  --gp-white-10: rgba(255, 255, 255, 0.10);
+  --gp-white-05: rgba(255, 255, 255, 0.05);
+  --gp-ink: rgb(23, 24, 27);
+  --gp-pearl: rgb(222, 228, 241);
+  --gp-orange: rgb(255, 169, 40);
+  --gp-red: rgb(255, 108, 108);
+  --accent: rgb(116, 255, 155); /* Color/Green/300 (Text/Green) */
+  --fg1: #fff; --fg2: var(--gp-white-70); --fg3: var(--gp-white-50);
+  --line: var(--gp-white-15);
+  --font-sans: "Urbanist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Kanit", "Urbanist", sans-serif;
+  --font-mono: "Red Hat Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  background:
+    linear-gradient(rgba(0, 87, 255, 0.08), rgba(0, 87, 255, 0.08)),
+    radial-gradient(100% 100% at 50% 0%, rgb(68, 68, 68) 0%, rgb(45, 45, 45) 50%, rgb(22, 22, 22) 100%);
+  background-blend-mode: color, normal;
+  background-color: rgb(22, 22, 22);
+  color: var(--fg1); font-family: var(--font-sans); font-weight: 500; font-size: 13px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column;
+}
+main { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
+footer button.primary { order: 2; }
+/* Busy button: spinner + "Resizing" */
+footer button .spin {
+  display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -2px;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+footer button[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+@media (prefers-reduced-motion: reduce) { footer button .spin { animation-duration: 1.6s; } }
+/* While resizing, settings are dimmed and locked; file rows are locked but stay readable since they show progress */
+.controls { transition: opacity .18s ease-in-out; }
+body.busy .controls { opacity: .4; }
+footer .summary { margin-right: auto; color: var(--fg2); font-size: 14px; font-variant-numeric: tabular-nums; }
+footer { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; align-items: center; background: rgba(22, 22, 22, 0.6); }
+h1 { font-family: var(--font-display); font-style: italic; font-weight: 700; font-size: 20px; letter-spacing: 0.02em; text-transform: uppercase; margin: 0; }
+.sub { margin: 2px 0 0; color: var(--fg2); }
+.label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--fg2); margin-bottom: 6px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-start; }
+
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9999px; background: var(--gp-white-10); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 5px 12px; line-height: 18px; border-radius: 9999px; cursor: pointer; font-weight: 700; color: var(--fg2); }
+.seg label:hover { color: var(--fg1); }
+.seg input:checked + label { color: #000; }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Sliding selection: one pill slides between options instead of each option painting its own */
+.seg { position: relative; }
+.seg label { position: relative; z-index: 1; transition: color .18s ease-in-out; }
+.seg-thumb {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+  border-radius: 9999px; background: var(--gp-pearl); box-shadow: 0px 12px 24px 0px rgba(0, 0, 0, 0.1);
+  transition: transform .18s ease-in-out, width .18s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) { .seg-thumb, .seg label { transition: none; } }
+.toggle { display: flex; gap: 8px; align-items: center; cursor: pointer; font-weight: 600; height: 34px; }
+.toggle input {
+  appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; flex: none;
+  border: 2px solid #fff; border-radius: 4px; display: grid; place-content: center; cursor: pointer;
+}
+.toggle input::after { content: ""; width: 8px; height: 5px; border-left: 2px solid #000; border-bottom: 2px solid #000; transform: rotate(-45deg) translate(1px, -1px); opacity: 0; }
+.toggle input:checked { background: #fff; }
+.toggle input:checked::after { opacity: 1; }
+.toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quality .label { display: flex; justify-content: space-between; gap: 12px; }
+.quality output { color: var(--fg1); font-variant-numeric: tabular-nums; }
+.quality-row { height: 34px; display: flex; align-items: center; }
+.quality input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 20px; margin: 0; background: transparent; cursor: pointer;
+}
+.quality input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 9999px; background: linear-gradient(to right, var(--accent) var(--fill, 50%), rgba(255,255,255,0.2) var(--fill, 50%)); }
+.quality input[type="range"]::-moz-range-track { height: 4px; border-radius: 9999px; background: rgba(255,255,255,0.2); }
+.quality input[type="range"]::-moz-range-progress { height: 4px; border-radius: 9999px; background: var(--accent); }
+.quality input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 0; border-radius: 50%; background: var(--accent); }
+.quality input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--accent); }
+.quality input[type="range"] { width: 150px; }
+
+/* Quality help: "?" button with a tooltip of suggested values (hover, keyboard focus or tap) */
+.quality { position: relative; z-index: 5; }
+/* AVIF quality stays in place; dimmed and locked while Original/PNG is selected so nothing shifts */
+.quality label[for="quality"], .quality input[type="range"] { transition: opacity .18s ease-in-out; }
+.quality.off label[for="quality"], .quality.off input[type="range"] { opacity: .4; }
+.quality.off input[type="range"] { cursor: not-allowed; }
+/* Editable quality number: looks like plain text until hovered or focused */
+.qnum {
+  width: calc(3ch + 14px); height: 28px; padding: 0 6px; margin: 0; box-sizing: border-box;
+  border: 1px solid var(--gp-white-15); border-radius: 8px; background: transparent;
+  color: var(--fg1); font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center;
+  -moz-appearance: textfield; appearance: textfield;
+  transition: border-color .15s ease-out, background .15s ease-out, opacity .18s ease-in-out;
+}
+.qnum::-webkit-outer-spin-button, .qnum::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qnum:hover:not(:disabled) { border-color: var(--gp-white-30); background: var(--gp-white-05); }
+.qnum:focus { outline: none; border-color: var(--accent); background: var(--gp-white-05); }
+.quality.off .qnum { opacity: .4; cursor: not-allowed; }
+/* Plugin: keep the label row its normal height so the slider lines up with the PNG/AVIF control */
+.quality .label { height: 16px; align-items: center; }
+.quality .qnum { height: 24px; font-size: 13px; }
+.qtip .qtip-off { display: none; margin: 8px 0 0; color: var(--fg2); }
+.quality.off .qtip .qtip-off { display: block; }
+.qhelp {
+  width: 18px; height: 18px; padding: 0; flex: none; display: inline-grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--gp-white-30); background: transparent;
+  color: var(--fg2); font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle;
+}
+.qhelp:hover:not(:disabled), .qhelp[aria-expanded="true"] { background: var(--gp-white-15); color: var(--fg1); }
+.qtip {
+  position: absolute; left: 0; top: calc(100% + 8px); z-index: 20; width: min(280px, calc(100vw - 32px));
+  padding: 12px 14px; border-radius: 12px; background: rgb(28, 30, 36); border: 1px solid var(--gp-white-15);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35); color: var(--fg2); font-size: 13px; font-weight: 500;
+  line-height: 1.45; text-align: left; text-transform: none;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .15s ease-in-out, transform .15s ease-in-out, visibility .15s;
+}
+.qtip p { margin: 0 0 8px; color: var(--fg1); }
+.qtip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.qtip dt { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.qtip dd { margin: 0; }
+.qhelp-wrap:hover .qtip, .qhelp:focus-visible + .qtip, .qhelp[aria-expanded="true"] + .qtip {
+  opacity: 1; visibility: visible; transform: none;
+}
+@media (prefers-reduced-motion: reduce) { .qtip { transition: none; } }
+.qtip { width: min(280px, calc(100vw - 24px)); left: auto; right: 0; }
+.qhelp-wrap { display: inline-flex; align-items: center; margin-left: 6px; position: static; }
+
+.selection {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--gp-white-05);
+  padding: 12px; display: grid; gap: 4px;
+}
+.selection strong { font-size: 14px; }
+.selection .hint { color: var(--fg3); }
+.selection.empty { border-style: dashed; text-align: center; padding: 20px 12px; }
+/* Selected layers, each with a small preview from Figma */
+.sel-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 0; }
+.sel-list li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; }
+/* Thin divider between rows so each layer reads as its own item */
+.sel-list li + li { border-top: 1px solid var(--line); }
+.sel-list li:last-child { padding-bottom: 0; }
+.sel-list .thumb { width: 48px; height: 48px; border-radius: 6px; background-size: 8px 8px; background-position: 0 0, 4px 4px; }
+.sel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-dims { color: var(--fg3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sel-more { color: var(--fg3); font-size: 12px; }
+.sel-list li.res { grid-template-columns: 48px minmax(0, 1fr); }
+.resline { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; min-height: 30px; margin: -3px 0; }
+.resline > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Remove (×): deselects the layer in Figma */
+.sel-remove {
+  width: 30px; height: 30px; padding: 0; flex: none; display: grid; place-items: center; align-self: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--fg2);
+}
+.sel-remove:hover:not(:disabled) { background: var(--gp-white-10); color: var(--fg1); }
+/* Round icon Download button next to the name box */
+.rowline button.dl-icon { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; flex: none; }
+.sel-remove svg { display: block; }
+.rowline button.sel-remove { padding: 0; }
+/* Newly added layers land at the top and flash briefly */
+.sel-list li.new { animation: sel-new 1.2s ease-out; }
+@keyframes sel-new { from { background: rgba(116, 255, 155, 0.18); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .sel-list li.new { animation: none; } }
+.sel-list li.res .meta { display: grid; gap: 6px; min-width: 0; }
+
+button {
+  font-family: var(--font-sans); font-size: 13px; font-weight: 700; cursor: pointer;
+  padding: 7px 14px; border-radius: 9999px; border: 1px solid var(--line);
+  background: var(--gp-white-10); color: var(--fg1);
+}
+button:hover:not(:disabled) { background: var(--gp-white-15); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--gp-pearl); color: var(--gp-ink); text-transform: uppercase; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1); }
+button.primary:hover:not(:disabled) { background: #fff; }
+
+.results { display: grid; gap: 8px; }
+.list { border: 1px solid var(--line); border-radius: 12px; background: var(--gp-white-05); overflow: hidden; }
+.row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 10px; border-top: 1px solid var(--line); align-items: center; }
+.row:first-child { border-top: 0; }
+.thumb {
+  width: 44px; height: 44px; border-radius: 6px; overflow: hidden; display: grid; place-items: center;
+  background-color: var(--gp-white-05);
+  background-image: linear-gradient(45deg, var(--gp-white-10) 25%, transparent 25%, transparent 75%, var(--gp-white-10) 75%), linear-gradient(45deg, var(--gp-white-10) 25%, transparent 25%, transparent 75%, var(--gp-white-10) 75%);
+  background-size: 10px 10px; background-position: 0 0, 5px 5px;
+}
+.thumb img { max-width: 100%; max-height: 100%; }
+.meta { min-width: 0; display: grid; gap: 4px; }
+.dims { color: var(--fg3); font-variant-numeric: tabular-nums; font-size: 12px; }
+.err { color: var(--gp-red); font-size: 12px; }
+.warn { color: var(--gp-orange); }
+.meta > * { min-width: 0; }
+.rowline { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.rowline button { flex: none; }
+.namefield { flex: 1; min-width: 0; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--gp-white-05); overflow: hidden; }
+.namefield:focus-within { border-color: var(--accent); }
+.namefield input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg1); font-family: var(--font-mono); font-size: 12px; padding: 6px 0 6px 8px; outline: none; }
+.namefield span { font-family: var(--font-mono); font-size: 12px; color: var(--fg3); padding-right: 8px; }
+.rowline button { padding: 6px 12px; }
+.status { color: var(--accent); min-height: 18px; }
+.status.error { color: var(--gp-red); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Asset Downsizer</h1>
+    <p class="sub">Resize selected layers to sharp 1x PNG or AVIF files.</p>
+  </header>
+
+  <section class="controls" aria-label="Resize settings">
+    <div>
+      <div class="label" id="scale-label">Supersample</div>
+      <div class="seg" role="radiogroup" aria-labelledby="scale-label">
+        <input type="radio" name="scale" id="s4" value="4" checked><label for="s4">4x</label>
+        <input type="radio" name="scale" id="s3" value="3"><label for="s3">3x</label>
+        <input type="radio" name="scale" id="s2" value="2"><label for="s2">2x</label>
+      </div>
+    </div>
+    <div>
+      <div class="label">Finish</div>
+      <label class="toggle"><input type="checkbox" id="sharpen" checked> Light sharpening</label>
+    </div>
+    <div>
+      <div class="label" id="format-label">Format</div>
+      <div class="seg" role="radiogroup" aria-labelledby="format-label">
+        <input type="radio" name="format" id="fmt-png" value="png" checked><label for="fmt-png">PNG</label>
+        <input type="radio" name="format" id="fmt-avif" value="avif"><label for="fmt-avif">AVIF</label>
+      </div>
+    </div>
+    <div class="quality off" id="quality-wrap">
+      <div class="label"><span><label for="quality">AVIF quality</label><span class="qhelp-wrap"><button type="button" class="qhelp" id="qhelp" aria-label="Which quality should I use?" aria-describedby="qtip" aria-expanded="false">?</button><span class="qtip" id="qtip" role="tooltip"><p>Higher keeps more detail but makes a bigger file.</p><dl><dt>50</dt><dd>Good default for most images</dd><dt>60–75</dt><dd>Text, icons, logos or fine detail</dd><dt>30–45</dt><dd>Large photos and backgrounds</dd></dl><p class="qtip-off">Pick AVIF to use this.</p></span></span></span> <input type="number" class="qnum" id="quality-num" min="0" max="100" step="1" value="50" inputmode="numeric" aria-label="AVIF quality, 0 to 100" disabled></div>
+      <div class="quality-row"><input type="range" id="quality" min="0" max="100" step="1" value="50" disabled></div>
+    </div>
+  </section>
+
+  <section class="selection" id="selection" aria-live="polite"></section>
+
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+</main>
+<footer>
+  <span class="summary" id="summary" aria-live="polite"></span>
+  <button type="button" id="cancel" hidden>Cancel</button>
+  <button type="button" id="zip" hidden>Download all (.zip)</button>
+  <button type="button" class="primary" id="export" disabled>Resize to 1x</button>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pica/9.0.1/pica.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { previews: new Map(), selection: [], results: [], exporting: false, pending: 0, scale: 4, gen: 0, snapshot: null, restoring: false };
+  let picaInst = null;
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtBytes = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(2) + " MB";
+  const post = (msg) => parent.postMessage({ pluginMessage: msg }, "*");
+
+  function status(text, isError) { const s = $("status"); s.textContent = text || ""; s.className = "status" + (isError ? " error" : ""); }
+
+  // ---- Resizing (same approach as the website) ----
+  function getPica(jsOnly) {
+    if (!window.pica) return null;
+    if (jsOnly) return (picaInst = window.pica({ features: ["js"] }));
+    if (!picaInst) { try { picaInst = window.pica({ features: ["js", "wasm", "ww"] }); } catch (e) { picaInst = window.pica({ features: ["js"] }); } }
+    return picaInst;
+  }
+  function fallbackResize(img, dst) {
+    let cur = img, w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    while (w / 2 >= dst.width && h / 2 >= dst.height) {
+      const c = document.createElement("canvas"); c.width = Math.round(w / 2); c.height = Math.round(h / 2);
+      const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(cur, 0, 0, c.width, c.height);
+      cur = c; w = c.width; h = c.height;
+    }
+    const ctx = dst.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(cur, 0, 0, dst.width, dst.height);
+  }
+  async function resize(img, dst, sharpen) {
+    const opts = { quality: 3, alpha: true };
+    if (sharpen) Object.assign(opts, { unsharpAmount: 70, unsharpRadius: 0.6, unsharpThreshold: 2 });
+    if (runToken) opts.cancelToken = runToken.promise;
+    const p = getPica();
+    if (!p) return fallbackResize(img, dst);
+    try { await p.resize(img, dst, opts); }
+    catch (e) { if (e && e.code === "cancelled") throw e; try { await getPica(true).resize(img, dst, opts); } catch (e2) { fallbackResize(img, dst); } }
+  }
+  function loadImage(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob); const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable")); };
+      img.src = url;
+    });
+  }
+
+  // ---- AVIF (Squoosh's encoder, @jsquash/avif, loaded on first use) ----
+  const AVIF_BASE = "https://cdn.jsdelivr.net/npm/@jsquash/avif@2.1.1/";
+  let avifEncoder = null;
+  function getAvifEncoder() {
+    if (!avifEncoder) {
+      avifEncoder = (async () => {
+        const mod = await import(AVIF_BASE + "encode.js/+esm");
+        const wasmUrl = AVIF_BASE + (self.crossOriginIsolated ? "codec/enc/avif_enc_mt.wasm" : "codec/enc/avif_enc.wasm");
+        const res = await fetch(wasmUrl);
+        const wasm = WebAssembly.compileStreaming ? await WebAssembly.compileStreaming(res) : await WebAssembly.compile(await res.arrayBuffer());
+        await mod.init(wasm);
+        return mod.default;
+      })();
+      avifEncoder.catch(() => { avifEncoder = null; });
+    }
+    return avifEncoder;
+  }
+
+  // Run the AVIF encoder in a background worker so the panel stays responsive (and Cancel works instantly).
+  // Falls back to encoding in the panel if a worker can't be started here.
+  const AVIF_WORKER_SRC = `
+    let enc = null;
+    async function load(base) {
+      const mod = await import(base + "encode.js/+esm");
+      const res = await fetch(base + "codec/enc/avif_enc.wasm");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await mod.init(await WebAssembly.compile(await res.arrayBuffer()));
+      return mod.default;
+    }
+    self.onmessage = async (e) => {
+      const { id, base, data, width, height, quality } = e.data;
+      try {
+        enc = enc || load(base);
+        const encode = await enc;
+        const buf = await encode(new ImageData(new Uint8ClampedArray(data), width, height), { quality });
+        self.postMessage({ id, buf }, [buf]);
+      } catch (err) { enc = null; self.postMessage({ id, error: String((err && err.message) || err) }); }
+    };`;
+  let avifWorker = null, workerBroken = false, jobSeq = 0;
+  const workerJobs = new Map();
+  function failJobs(code) {
+    workerJobs.forEach((j) => { const e = new Error(code); e.code = code; j.reject(e); });
+    workerJobs.clear();
+  }
+  function getAvifWorker() {
+    if (workerBroken) return null;
+    if (!avifWorker) {
+      try {
+        const url = URL.createObjectURL(new Blob([AVIF_WORKER_SRC], { type: "text/javascript" }));
+        avifWorker = new Worker(url, { type: "module" });
+        avifWorker.onmessage = (e) => {
+          const j = workerJobs.get(e.data.id); if (!j) return;
+          workerJobs.delete(e.data.id);
+          if (e.data.error) { const err = new Error(e.data.error); err.code = "avif-load"; j.reject(err); } else j.resolve(e.data.buf);
+        };
+        avifWorker.onerror = () => { workerBroken = true; avifWorker = null; failJobs("worker-failed"); };
+      } catch (e) { workerBroken = true; avifWorker = null; return null; }
+    }
+    return avifWorker;
+  }
+  function stopAvifWorker() {
+    if (avifWorker) { avifWorker.terminate(); avifWorker = null; }
+    failJobs("cancelled");
+  }
+  async function encodeAvif(imageData, quality) {
+    const w = getAvifWorker();
+    if (w) {
+      try {
+        return await new Promise((resolve, reject) => {
+          const id = ++jobSeq; workerJobs.set(id, { resolve, reject });
+          const copy = imageData.data.slice().buffer; // keep the original in case we need the fallback
+          w.postMessage({ id, base: AVIF_BASE, data: copy, width: imageData.width, height: imageData.height, quality }, [copy]);
+        });
+      } catch (e) {
+        if (e && e.code === "cancelled") throw e;
+        workerBroken = true; // worker couldn't load the encoder here; encode in the panel from now on
+      }
+    }
+    let encode;
+    try { encode = await getAvifEncoder(); }
+    catch (e) { const err = new Error("avif-load"); err.code = "avif-load"; throw err; }
+    return encode(imageData, { quality });
+  }
+
+  // Cancel token for the current run: stops pica's resize work part-way.
+  let runToken = null;
+  function newRunToken() {
+    let cancel; const promise = new Promise((_, reject) => { cancel = () => { const e = new Error("cancelled"); e.code = "cancelled"; reject(e); }; });
+    promise.catch(() => {});
+    runToken = { promise, cancel };
+  }
+
+  // ---- Names ----
+  // Layer names can hold "/" (Figma groups); file systems can't, so swap in "-". Drop a trailing @2x/@3x/@4x.
+  function defaultBase(layerName) {
+    let base = String(layerName).trim().replace(/[\\/:*?"<>|]+/g, "-");
+    base = base.replace(/[@_\-\s]?[234]x$/i, "").trim();
+    return base || "asset";
+  }
+  function cleanBase(raw, fallback) {
+    let base = String(raw ?? "").trim().replace(/\.(png|avif|zip)$/i, "").replace(/[\\/:*?"<>|]/g, "-").trim();
+    return base || fallback;
+  }
+  const fileName = (r) => cleanBase(r.base, r.defaultBase) + "." + (r.ext || "png");
+  function uniqueNames(list) {
+    const seen = {};
+    return list.map((r) => {
+      let n = fileName(r);
+      if (seen[n]) { const dot = n.lastIndexOf("."); let k = 2, c; do { c = n.slice(0, dot) + "-" + k + n.slice(dot); k++; } while (seen[c]); n = c; }
+      seen[n] = true; return n;
+    });
+  }
+
+  // ---- Downloads ----
+  function saveBlob(name, blob) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  // ---- Rendering ----
+  // ---- One list ----
+  // Resized files are kept per layer. The list shows the selected layers (or, with nothing selected, the
+  // resized files). Each row is either waiting, resizing, or done; Resize only does the rows that aren't done.
+  function settingsNow() {
+    return {
+      scale: Number(document.querySelector('input[name="scale"]:checked').value),
+      sharpen: $("sharpen").checked,
+      ext: document.querySelector('input[name="format"]:checked').value,
+      quality: Number($("quality").value),
+    };
+  }
+  function isCurrent(r) {
+    const s = settingsNow();
+    return r.scale === s.scale && r.sharpen === s.sharpen && r.ext === s.ext && (r.ext !== "avif" || r.quality === s.quality);
+  }
+  const resultFor = (id) => state.results.find((r) => r.key === id);
+  // "working" = being resized now; "done" = file matches the current settings; "error"; otherwise "waiting".
+  function rowState(r) {
+    if (!r) return "waiting";
+    if (r.working) return r.blob ? "done" : "working";
+    if (!isCurrent(r)) return "waiting";
+    if (r.blob) return "done";
+    return r.error ? "error" : "waiting";
+  }
+  function visibleRows() {
+    if (state.selection.length) return state.selection.map((x) => ({ id: x.id, name: x.name, w: x.width, h: x.height, r: resultFor(x.id) }));
+    return state.results.filter((r) => r.working || r.blob).map((r) => ({ id: r.key, name: r.layerName, w: r.srcW && Math.round(r.srcW / r.scale), h: r.srcH && Math.round(r.srcH / r.scale), r }));
+  }
+  const toResize = () => visibleRows().filter((v) => { const st = rowState(v.r); return st === "waiting" || st === "error"; });
+  const readyRows = () => visibleRows().filter((v) => v.r && !v.r.working && rowState(v.r) === "done");
+
+  function render() {
+    const rows = visibleRows();
+    const anyResult = rows.some((v) => v.r && (v.r.working || v.r.blob || v.r.error));
+    $("summary").textContent = anyResult ? `${readyRows().length} of ${rows.length} ready` : "";
+    renderList(rows);
+    renderFooter();
+  }
+  const renderSelection = render, renderResults = render;
+
+  function renderList(rows) {
+    const box = $("selection");
+    const n = rows.length;
+    box.classList.toggle("empty", !n);
+    if (!n) {
+      box.innerHTML = '<strong>Select layers to resize</strong><span class="hint">Frames, components, groups and other layers</span>';
+      return;
+    }
+    const active = document.activeElement;
+    const focusId = active && active.dataset && active.dataset.name;
+    const sel = focusId ? [active.selectionStart, active.selectionEnd] : null;
+
+    const thumb = (id, url) => {
+      const src = url || state.previews.get(id);
+      return `<span class="thumb"${url ? "" : ` data-preview="${esc(id)}"`}>${src ? `<img src="${src}" alt="">` : ""}</span>`;
+    };
+    const removeBtn = (id, name) => `<button type="button" class="sel-remove" data-remove="${esc(id)}" aria-label="Remove ${esc(name)}" title="Remove">${X_ICON}</button>`;
+    const shown = rows.slice(0, 30);
+    const items = shown.map((v) => {
+      const r = v.r, st = rowState(r), x = removeBtn(v.id, v.name);
+      const isNew = state.justAdded && state.justAdded.has(v.id) ? ' class="new"' : "";
+      const simple = (right) => `<li${isNew}>${thumb(v.id, null)}<span class="sel-name" title="${esc(v.name)}">${esc(v.name)}</span><span class="sel-dims">${right}</span>${x}</li>`;
+      if (st === "working") return simple("Resizing…");
+      if (st === "waiting") return simple(v.w ? `${v.w}×${v.h}` : "");
+      if (st === "error") return `<li class="res">${thumb(v.id, null)}<div class="meta"><div class="resline"><span class="sel-name">${esc(v.name)}</span>${x}</div><div class="err">${esc(r.error)}</div></div></li>`;
+      return `<li class="res">${thumb(v.id, r.url)}<div class="meta">
+          <div class="dims">${r.updating ? "Resizing…" : `${r.srcW}×${r.srcH} → ${r.outW}×${r.outH} px · ${fmtBytes(r.blob.size)}${r.ext === "avif" ? ` · AVIF q${r.quality}` : ""}${r.rounded ? ' · <span class="warn">rounded</span>' : ""}`}</div>
+          <div class="rowline">
+            <label class="namefield"><input type="text" id="n-${esc(r.key)}" data-name="${esc(r.key)}" value="${esc(r.base)}" aria-label="File name for ${esc(r.layerName)}" spellcheck="false" autocomplete="off"><span>.${r.ext}</span></label>
+            <button type="button" class="dl-icon" data-dl="${esc(r.key)}" aria-label="Download ${esc(r.base)}.${r.ext}" title="Download"${r.updating ? " disabled" : ""}>${DL_ICON}</button>${x}
+          </div></div></li>`;
+    }).join("");
+    const more = n > shown.length ? `<span class="sel-more">and ${n - shown.length} more</span>` : "";
+    const label = state.selection.length ? `${n} layer${n === 1 ? "" : "s"} selected` : `${n} layer${n === 1 ? "" : "s"}`;
+    box.innerHTML = `<strong>${label}</strong><ul class="sel-list">${items}</ul>${more}`;
+
+    if (focusId) { const el = document.getElementById("n-" + focusId); if (el) { el.focus(); try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+  }
+
+  // One clear next step in the footer: Resize while any row still needs it, otherwise Download.
+  // Drawn as an icon (not the × character) so it sits exactly in the middle of its button.
+  const X_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>';
+  const DL_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5"/><path d="m4.5 6.75 3.5 3.5 3.5-3.5"/><path d="M3 13.5h10"/></svg>';
+  const BUSY_LABEL = '<span class="spin" aria-hidden="true"></span>Resizing';
+  function renderFooter() {
+    const exp = $("export"), zip = $("zip");
+    $("cancel").hidden = !state.exporting;
+    document.body.classList.toggle("busy", state.exporting);
+    document.querySelector(".controls").inert = state.exporting;
+    $("selection").inert = state.exporting;
+    const rows = visibleRows(), todo = toResize().length, ready = readyRows().length;
+    exp.removeAttribute("aria-busy"); zip.removeAttribute("aria-busy");
+    if (state.exporting) {
+      exp.hidden = false; exp.classList.add("primary"); exp.disabled = true; exp.setAttribute("aria-busy", "true"); exp.innerHTML = BUSY_LABEL;
+      zip.hidden = true;
+    } else if (todo > 0 || !ready) {
+      exp.hidden = false; exp.classList.add("primary"); exp.disabled = !todo;
+      exp.textContent = todo > 1 ? `Resize ${todo} to 1x` : "Resize to 1x";
+      zip.hidden = true;
+    } else {
+      exp.hidden = true;
+      zip.hidden = false; zip.classList.add("primary"); zip.disabled = false;
+      zip.textContent = ready > 1 ? "Download all (.zip)" : "Download";
+    }
+  }
+
+  // ---- Messages from Figma ----
+  window.onmessage = async (event) => {
+    const msg = event.data && event.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === "selection") {
+      // Drop previews of layers that are no longer selected.
+      const keep = new Set(msg.items.map((i) => i.id));
+      state.previews.forEach((url, id) => { if (!keep.has(id)) { URL.revokeObjectURL(url); state.previews.delete(id); } });
+      const prevIds = new Set(state.selection.map((x) => x.id));
+      const byId = new Map(msg.items.map((i) => [i.id, i]));
+      const added = msg.items.filter((i) => !prevIds.has(i.id));
+      const kept = state.selection.filter((x) => byId.has(x.id)).map((x) => byId.get(x.id));
+      state.selection = [...added, ...kept];
+      state.justAdded = prevIds.size ? new Set(added.map((i) => i.id)) : new Set();
+      renderSelection();
+      // If the panel is scrolled past the top of the list, bring the new layers into view.
+      if (state.justAdded.size) {
+        const box = $("selection");
+        if (box.getBoundingClientRect().top < 0) box.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+      state.justAdded = new Set();
+    } else if (msg.type === "preview") {
+      if (!state.selection.some((s) => s.id === msg.id)) return;
+      const old = state.previews.get(msg.id); if (old) URL.revokeObjectURL(old);
+      const url = URL.createObjectURL(new Blob([msg.bytes], { type: "image/png" }));
+      state.previews.set(msg.id, url);
+      const slot = document.querySelector(`[data-preview="${CSS.escape(msg.id)}"]`);
+      if (slot) slot.innerHTML = `<img src="${url}" alt="">`;
+    } else if (msg.type === "exported") {
+      if (msg.gen !== state.gen) return;
+      const r = state.results.find((x) => x.key === msg.id);
+      if (!r) return;
+      const scale = r.scale;
+      try {
+        const { img, url } = await loadImage(new Blob([msg.bytes], { type: "image/png" }));
+        const srcW = img.naturalWidth, srcH = img.naturalHeight;
+        const outW = Math.max(1, Math.round(srcW / scale)), outH = Math.max(1, Math.round(srcH / scale));
+        const dst = document.createElement("canvas"); dst.width = outW; dst.height = outH;
+        await resize(img, dst, r.sharpen);
+        URL.revokeObjectURL(url);
+        let blob;
+        if (r.ext === "avif") {
+          blob = new Blob([await encodeAvif(dst.getContext("2d").getImageData(0, 0, outW, outH), r.quality)], { type: "image/avif" });
+        } else {
+          blob = await new Promise((res, rej) => dst.toBlob((b) => b ? res(b) : rej(new Error("encode")), "image/png"));
+        }
+        if (msg.gen !== state.gen) return; // cancelled while this one was being resized
+        Object.assign(r, { srcW, srcH, outW, outH, rounded: srcW % scale !== 0 || srcH % scale !== 0, blob, url: URL.createObjectURL(blob), updating: false, working: false, error: null });
+      } catch (e) {
+        if (msg.gen !== state.gen) return;
+        r.blob = null; r.url = null; r.updating = false; r.working = false;
+        r.error = e && e.code === "avif-load" ? "Couldn't load the AVIF encoder. Check your connection and try again" : "Couldn't resize this layer";
+      }
+      finishOne();
+    } else if (msg.type === "export-error") {
+      if (msg.gen !== state.gen) return;
+      const r = state.results.find((x) => x.key === msg.id);
+      if (r) { r.error = msg.message; r.blob = null; r.url = null; r.updating = false; r.working = false; }
+      finishOne();
+    }
+  };
+
+  function finishOne() {
+    state.pending -= 1;
+    if (state.pending <= 0) {
+      state.exporting = false;
+      if (state.rerun) { render(); reapplyNow(); return; }
+      const runKeys = state.snapshot ? state.snapshot.keys : [];
+      commitRun();
+      const failed = state.results.filter((r) => runKeys.includes(r.key) && !r.blob).length;
+      status(failed ? `${failed} couldn't be resized` : "", failed > 0);
+      // A Resize click saves the files straight away; the Download button stays for saving again.
+      // Wait until the Download button has actually been drawn (and a beat after), so the save window
+      // doesn't open over a button that still looks busy.
+      if (state.autoSave) {
+        state.autoSave = false;
+        if (readyRows().length) {
+          let started = false;
+          const go = () => { if (started) return; started = true; setTimeout(downloadAll, 250); };
+          requestAnimationFrame(() => requestAnimationFrame(go));
+          setTimeout(go, 500); // in case the panel isn't being drawn right now
+        }
+      }
+    }
+    render();
+  }
+
+  // ---- Actions ----
+  // Resize these layers with the current settings. Layers that already have a file keep their typed name and
+  // show the previous preview until the new file is ready. Everything else in the list is left alone.
+  function runExport(layers, isReapply) {
+    const s = settingsNow();
+    if (!state.snapshot) state.snapshot = { prev: new Map(), added: new Set(), keys: [], settings: null };
+    const snap = state.snapshot;
+    layers.forEach((l) => {
+      let r = resultFor(l.id);
+      if (r) {
+        if (!snap.prev.has(r.key) && !snap.added.has(r.key)) snap.prev.set(r.key, { ...r });
+        if (isReapply && !snap.settings) snap.settings = { scale: r.scale, sharpen: r.sharpen, ext: r.ext, quality: r.quality };
+        Object.assign(r, s, { layerName: l.name, working: true, updating: !!r.blob, error: null });
+      } else {
+        r = { key: l.id, layerName: l.name, defaultBase: defaultBase(l.name), base: defaultBase(l.name), ...s, working: true, updating: false, blob: null, url: null };
+        state.results.push(r); snap.added.add(r.key);
+      }
+      if (!snap.keys.includes(r.key)) snap.keys.push(r.key);
+    });
+    state.exporting = true; state.pending = layers.length; state.rerun = false; state.gen += 1;
+    newRunToken();
+    status("");
+    render();
+    post({ type: "export", ids: layers.map((l) => l.id), scale: s.scale, gen: state.gen });
+  }
+
+  // Keep the new files; free previews that only the snapshot still pointed to.
+  function commitRun() {
+    const snap = state.snapshot; if (!snap) return;
+    snap.prev.forEach((old, key) => { const r = resultFor(key); if (old.url && (!r || r.url !== old.url)) URL.revokeObjectURL(old.url); });
+    state.snapshot = null;
+  }
+
+  // Cancel: stop Figma, drop the half-done files, and put back what was there before (and the settings,
+  // if the run came from a setting change).
+  function cancelRun() {
+    if (!state.exporting || !state.snapshot) return;
+    state.gen += 1; post({ type: "cancel" }); state.autoSave = false;
+    if (runToken) runToken.cancel();
+    stopAvifWorker();
+    clearTimeout(reapplyTimer);
+    const snap = state.snapshot; state.snapshot = null;
+    state.results = state.results.filter((r) => {
+      if (snap.added.has(r.key)) { if (r.url) URL.revokeObjectURL(r.url); return false; }
+      const old = snap.prev.get(r.key);
+      if (old) { if (r.url && r.url !== old.url) URL.revokeObjectURL(r.url); Object.keys(r).forEach((k) => delete r[k]); Object.assign(r, old); }
+      return true;
+    });
+    state.exporting = false; state.pending = 0; state.rerun = false;
+    if (snap.settings) {
+      state.restoring = true;
+      const set = (sel) => { const el = document.querySelector(sel); if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); } };
+      set(`input[name="scale"][value="${snap.settings.scale}"]`);
+      set(`input[name="format"][value="${snap.settings.ext}"]`);
+      $("sharpen").checked = snap.settings.sharpen;
+      showQ(snap.settings.quality);
+      state.restoring = false;
+    }
+    status(snap.prev.size ? "Cancelled. Your previous files are back." : "Cancelled");
+    render();
+  }
+  $("cancel").addEventListener("click", cancelRun);
+
+  $("export").addEventListener("click", () => {
+    const todo = toResize();
+    if (!todo.length || state.exporting) return;
+    state.autoSave = true;
+    runExport(todo.map((v) => ({ id: v.id, name: v.name })), false);
+  });
+
+  // A setting changed: redo the files in the list right away (like the website does), so the next step
+  // stays "Download". Layers that haven't been resized yet are left for the Resize button.
+  let reapplyTimer = null;
+  function reapplySettings() {
+    if (state.restoring || !state.results.length) return;
+    // Let the option's slide and text colour finish before the heavy work starts.
+    clearTimeout(reapplyTimer);
+    reapplyTimer = setTimeout(reapplyNow, 220);
+  }
+  function reapplyNow() {
+    state.autoSave = false; // setting tweaks update the files without opening a save prompt each time
+    if (state.exporting) { state.rerun = true; return; }
+    const stale = visibleRows().filter((v) => v.r && (v.r.blob || v.r.error) && !isCurrent(v.r));
+    if (stale.length) runExport(stale.map((v) => ({ id: v.id, name: v.name })), true);
+    else render();
+  }
+
+  $("selection").addEventListener("input", (e) => {
+    const key = e.target.dataset && e.target.dataset.name; if (!key) return;
+    const r = resultFor(key); if (r) r.base = e.target.value;
+  });
+  $("selection").addEventListener("keydown", (e) => {
+    const key = e.target.dataset && e.target.dataset.name;
+    if (!key || e.key !== "Enter") return;
+    e.preventDefault();
+    const r = resultFor(key); if (r && r.blob) saveBlob(fileName(r), r.blob);
+  });
+  // Remove a layer: drop its resized file (if any) and deselect it in Figma, which updates the list.
+  $("selection").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-remove]"); if (!b || state.exporting) return;
+    const id = b.dataset.remove;
+    const r = resultFor(id);
+    if (r) { if (r.url) URL.revokeObjectURL(r.url); state.results = state.results.filter((x) => x !== r); }
+    if (state.selection.some((x) => x.id === id)) {
+      state.selection = state.selection.filter((x) => x.id !== id); // update right away; Figma confirms shortly
+      post({ type: "deselect", id });
+    }
+    render();
+  });
+  $("selection").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dl]"); if (!b) return;
+    const r = resultFor(b.dataset.dl); if (r && r.blob) saveBlob(fileName(r), r.blob);
+  });
+  $("zip").addEventListener("click", () => downloadAll());
+  // Everything that's done in the list: one file saves as itself; several save as a zip.
+  async function downloadAll() {
+    const done = readyRows().map((v) => v.r); if (!done.length) return;
+    if (done.length === 1) { saveBlob(fileName(done[0]), done[0].blob); return; }
+    if (!window.JSZip) { status("The zip helper didn't load. Download the files one at a time", true); return; }
+    const zip = new JSZip(); const names = uniqueNames(done);
+    done.forEach((r, i) => zip.file(names[i], r.blob));
+    saveBlob(`assets-1x-${new Date().toISOString().slice(0, 10)}.zip`, await zip.generateAsync({ type: "blob" }));
+  }
+
+  document.querySelectorAll('input[name="format"]').forEach((r) => r.addEventListener("change", () => {
+    $("quality-wrap").classList.toggle("off", r.value !== "avif"); $("quality").disabled = r.value !== "avif"; $("quality-num").disabled = r.value !== "avif";
+  }));
+  // Settings apply to already-exported files automatically.
+  document.querySelectorAll('input[name="scale"], input[name="format"], #sharpen, #quality').forEach((el) => el.addEventListener("change", reapplySettings));
+  // Quality help: tap or click toggles the tooltip; Escape or a click elsewhere closes it
+  const qhelp = $("qhelp");
+  qhelp.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); qhelp.setAttribute("aria-expanded", qhelp.getAttribute("aria-expanded") === "true" ? "false" : "true"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".qhelp-wrap")) qhelp.setAttribute("aria-expanded", "false"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") qhelp.setAttribute("aria-expanded", "false"); });
+  // Quality: slider and number box stay in sync. Typing updates the slider live; Enter or leaving the box applies it.
+  const qRange = $("quality"), qNum = $("quality-num");
+  const showQ = (v) => { qRange.value = v; qNum.value = v; qRange.style.setProperty("--fill", v + "%"); };
+  qRange.addEventListener("input", () => showQ(qRange.value));
+  qNum.addEventListener("input", () => {
+    const v = Number(qNum.value);
+    if (qNum.value !== "" && Number.isFinite(v) && v >= 0 && v <= 100) { qRange.value = Math.round(v); qRange.style.setProperty("--fill", Math.round(v) + "%"); }
+  });
+  qNum.addEventListener("change", () => {
+    const v = Number(qNum.value);
+    const clamped = qNum.value === "" || !Number.isFinite(v) ? Number(qRange.value) : Math.min(100, Math.max(0, Math.round(v)));
+    showQ(clamped);
+    qRange.dispatchEvent(new Event("change"));
+  });
+  qNum.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); qNum.blur(); } });
+
+  // Sliding selection for segmented controls (ease-in-out between options).
+  function setupSeg(seg) {
+    const thumb = document.createElement("span");
+    thumb.className = "seg-thumb"; thumb.setAttribute("aria-hidden", "true");
+    seg.prepend(thumb);
+    const place = (animate) => {
+      const input = seg.querySelector("input:checked");
+      const label = input && seg.querySelector('label[for="' + input.id + '"]');
+      if (!label || !label.offsetWidth) return;
+      if (!animate) thumb.style.transition = "none";
+      thumb.style.width = label.offsetWidth + "px";
+      thumb.style.height = label.offsetHeight + "px";
+      thumb.style.transform = "translate(" + label.offsetLeft + "px, " + label.offsetTop + "px)";
+      if (!animate) { void thumb.offsetWidth; thumb.style.transition = ""; }
+    };
+    seg.addEventListener("change", () => place(true));
+    place(false);
+    return () => place(false);
+  }
+  const segRelayout = Array.from(document.querySelectorAll(".seg")).map(setupSeg);
+  const relayoutSegs = () => segRelayout.forEach((f) => f());
+  window.addEventListener("resize", relayoutSegs);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayoutSegs);
+  // A hidden control has no size yet; place its pill once it becomes visible.
+  if ("ResizeObserver" in window) { const ro = new ResizeObserver(relayoutSegs); document.querySelectorAll(".seg").forEach((s) => ro.observe(s)); }
+
+  renderSelection();
+})();
+</script>
+</body>
+</html>

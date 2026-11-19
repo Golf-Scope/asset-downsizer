@@ -1,0 +1,20 @@
+{
+  "name": "Asset Downsizer",
+  "id": "asset-downsizer-golfplus-dev",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": [
+    "figma"
+  ],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://cdnjs.cloudflare.com",
+      "https://cdn.jsdelivr.net",
+      "https://fonts.googleapis.com",
+      "https://fonts.gstatic.com"
+    ],
+    "reasoning": "Loads the image-resizing (pica), zip (JSZip) and AVIF encoder (@jsquash/avif) libraries and the brand fonts from public CDNs. No user data is sent anywhere."
+  }
+}
