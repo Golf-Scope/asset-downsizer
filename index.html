@@ -629,10 +629,26 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     return downloadsNs;
   }
 
+  // File types the Claude-hosted version can save directly. Anything else (like .avif) is wrapped in a .zip there.
+  const CLAUDE_SAVE_TYPES = /\.(png|jpe?g|webp|gif|zip)$/i;
+
   async function saveFile(filename, blob) {
     const d = await getDownloads();
     if (d) {
-      try { await d.save({ filename, data: blob }); toast("Saved " + filename); }
+      let zipped = false;
+      if (!CLAUDE_SAVE_TYPES.test(filename) && window.JSZip) {
+        const zip = new JSZip();
+        zip.file(filename, blob);
+        blob = await zip.generateAsync({ type: "blob" });
+        filename = filename.replace(/\.[^.]+$/, "") + ".zip";
+        zipped = true;
+      }
+      try {
+        await d.save({ filename, data: blob });
+        toast(zipped
+          ? "Saved " + filename + ". Claude can't save .avif files directly, so it's inside a zip. For plain .avif downloads, use golf-scope.github.io/asset-downsizer"
+          : "Saved " + filename);
+      }
       catch (e) {
         if (e && e.code === "declined") toast("Download cancelled");
         else if (e && e.code === "rate_limited") toast("A save prompt is already open. Finish that one first", true);
