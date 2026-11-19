@@ -104,11 +104,11 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 
 /* Sliding selection: one pill slides between options instead of each option painting its own */
 .seg { position: relative; }
-.seg label { position: relative; z-index: 1; transition: color .25s ease-in-out; }
+.seg label { position: relative; z-index: 1; transition: color .18s ease-in-out; }
 .seg-thumb {
   position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
   border-radius: 9999px; background: var(--gp-pearl); box-shadow: 0px 12px 24px 0px rgba(0, 0, 0, 0.1);
-  transition: transform .25s ease-in-out, width .25s ease-in-out;
+  transition: transform .18s ease-in-out, width .18s ease-in-out;
 }
 @media (prefers-reduced-motion: reduce) { .seg-thumb, .seg label { transition: none; } }
 /* Checkbox: 20×20, 4px radius, 2px white stroke; checked fills white with a black check */
