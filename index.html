@@ -151,6 +151,8 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .quality label[for="quality"], .quality input[type="range"], .quality output { transition: opacity .18s ease-in-out; }
 .quality.off label[for="quality"], .quality.off input[type="range"], .quality.off output { opacity: .4; }
 .quality.off input[type="range"] { cursor: not-allowed; }
+.quality { transition: background-color .18s ease-in-out; }
+.quality.off { background: var(--gp-white-05); } /* half the normal white-10 fill */
 .qtip .qtip-off { display: none; margin: 8px 0 0; color: var(--fg2); }
 .quality.off .qtip .qtip-off { display: block; }
 .qhelp {
