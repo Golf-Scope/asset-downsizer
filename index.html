@@ -116,6 +116,11 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .toggle input:checked { background: var(--gp-white); }
 .toggle input:checked::after { opacity: 1; }
 .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quality .label { display: flex; justify-content: space-between; gap: 12px; }
+.quality output { color: var(--fg1); font-variant-numeric: tabular-nums; }
+.quality-row { height: 44px; display: flex; align-items: center; }
+.quality input[type="range"] { width: 180px; accent-color: var(--accent); cursor: pointer; }
+.quality input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
 /* Drop zone: glass card */
 .drop {
@@ -275,13 +280,24 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       <div class="label">Finish</div>
       <label class="toggle"><input type="checkbox" id="sharpen" checked> Light sharpening</label>
     </div>
+    <div>
+      <div class="label" id="format-label">Format</div>
+      <div class="seg" role="radiogroup" aria-labelledby="format-label">
+        <input type="radio" name="format" id="fmt-orig" value="original" checked><label for="fmt-orig">Original</label>
+        <input type="radio" name="format" id="fmt-avif" value="avif"><label for="fmt-avif">AVIF</label>
+      </div>
+    </div>
+    <div class="quality" id="quality-wrap" hidden>
+      <div class="label"><label for="quality">Quality</label> <output id="quality-out" for="quality">50</output></div>
+      <div class="quality-row"><input type="range" id="quality" min="0" max="100" step="1" value="50"></div>
+    </div>
   </section>
 
   <label class="drop" id="drop">
-    <input type="file" id="file" multiple accept="image/png,image/jpeg,image/webp">
+    <input type="file" id="file" multiple accept="image/png,image/jpeg,image/webp,image/avif">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
     <strong>Drop images here, or click to choose</strong>
-    <span>PNG, JPG or WebP</span>
+    <span>PNG, JPG, WebP or AVIF</span>
   </label>
 
   <section class="results" aria-label="Resized files">
@@ -302,7 +318,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       <li>Pick the size you exported at, then drop or paste the files here.</li>
       <li>Rename if needed, then download one file or all of them as a zip.</li>
     </ol>
-    <p>Images are resized with a Lanczos filter in your browser and never uploaded.</p>
+    <p>Images are resized with a Lanczos filter in your browser and never uploaded. AVIF files are encoded with the same encoder Squoosh uses.</p>
   </details>
 </main>
 
@@ -334,7 +350,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { factor: 4, sharpen: true, items: [] };
+  const state = { factor: 4, sharpen: true, format: "original", quality: 50, items: [] };
   let nextId = 1;
   let batchCount = 0;
   let picaInst = null;
@@ -406,6 +422,38 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     });
   }
 
+  // AVIF: browsers can't encode it natively, so load Squoosh's AVIF encoder (@jsquash/avif) on first use.
+  const AVIF_BASE = "https://cdn.jsdelivr.net/npm/@jsquash/avif@2.1.1/";
+  let avifEncoder = null;
+  function getAvifEncoder() {
+    if (!avifEncoder) {
+      avifEncoder = (async () => {
+        const mod = await import(AVIF_BASE + "encode.js/+esm");
+        // The multi-threaded build is only used on cross-origin-isolated pages; match the wasm to it.
+        const wasmUrl = AVIF_BASE + (self.crossOriginIsolated ? "codec/enc/avif_enc_mt.wasm" : "codec/enc/avif_enc.wasm");
+        const res = await fetch(wasmUrl);
+        const wasm = WebAssembly.compileStreaming ? await WebAssembly.compileStreaming(res) : await WebAssembly.compile(await res.arrayBuffer());
+        await mod.init(wasm);
+        return mod.default;
+      })();
+      avifEncoder.catch(() => { avifEncoder = null; });
+    }
+    return avifEncoder;
+  }
+
+  async function encodeOutput(dst, file) {
+    if (state.format === "avif" || file.type === "image/avif") {
+      let encode;
+      try { encode = await getAvifEncoder(); }
+      catch (e) { const err = new Error("avif-load"); err.code = "avif-load"; throw err; }
+      const data = dst.getContext("2d").getImageData(0, 0, dst.width, dst.height);
+      const buf = await encode(data, { quality: state.quality });
+      return { blob: new Blob([buf], { type: "image/avif" }), ext: "avif", avif: true };
+    }
+    const info = outInfo(file);
+    return { blob: await canvasToBlob(dst, info.type), ext: info.ext, avif: false };
+  }
+
   function canvasToBlob(canvas, type) {
     return new Promise((resolve, reject) => canvas.toBlob((b) => b ? resolve(b) : reject(new Error("encode")), type, 0.92));
   }
@@ -421,16 +469,20 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       const dst = document.createElement("canvas"); dst.width = tw; dst.height = th;
       item.method = await resize(img, dst);
       URL.revokeObjectURL(url);
-      const info = outInfo(item.file);
-      item.blob = await canvasToBlob(dst, info.type);
+      const out = await encodeOutput(dst, item.file);
+      item.blob = out.blob;
       item.url = URL.createObjectURL(item.blob);
-      item.outName = outName(item.file.name, info.ext);
-      item.ext = info.ext;
-      item.defaultBase = item.outName.slice(0, -(info.ext.length + 1));
+      item.outName = outName(item.file.name, out.ext);
+      item.ext = out.ext;
+      item.defaultBase = item.outName.slice(0, -(out.ext.length + 1));
+      item.avifQ = out.avif ? state.quality : null;
+      item.error = null;
       Object.assign(item, { w, h, tw, th, exact: w % f === 0 && h % f === 0, factorUsed: f, status: "done" });
     } catch (e) {
       item.status = "error";
-      item.error = "Couldn't read this file. Use a PNG, JPG or WebP image.";
+      item.error = e && e.code === "avif-load"
+        ? "Couldn't load the AVIF encoder. Check your connection, or use golf-scope.github.io/asset-downsizer"
+        : "Couldn't read this file. Use a PNG, JPG, WebP or AVIF image";
     }
     render();
   }
@@ -440,8 +492,8 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
   }
 
   function addFiles(fileList) {
-    const files = Array.from(fileList).filter((f) => f && (f.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(f.name)));
-    if (!files.length) { toast("Those weren't image files. Use PNG, JPG or WebP", true); return; }
+    const files = Array.from(fileList).filter((f) => f && (f.type.startsWith("image/") || /\.(png|jpe?g|webp|avif)$/i.test(f.name)));
+    if (!files.length) { toast("Those weren't image files. Use PNG, JPG, WebP or AVIF", true); return; }
     toast("");
     // Real files replace the example.
     state.items.filter((i) => i.sample).forEach((i) => i.url && URL.revokeObjectURL(i.url));
@@ -458,7 +510,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
   // Clean a typed name: drop a typed extension and characters file systems refuse.
   function cleanBase(raw, ext, fallback) {
     let base = String(raw ?? "").trim();
-    base = base.replace(new RegExp("\\.(" + ext + "|png|jpe?g|webp|zip)$", "i"), "");
+    base = base.replace(new RegExp("\\.(" + ext + "|png|jpe?g|webp|avif|zip)$", "i"), "");
     base = base.replace(/[\\/:*?"<>|]/g, "-").trim();
     return base || fallback;
   }
@@ -554,7 +606,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       if (it.sample) chips.push('<span class="chip neutral">Example</span>');
       if (latest) chips.push('<span class="chip new">Latest</span>');
       if (it.status === "done") {
-        chips.push(`<span class="chip">÷${it.factorUsed}</span>`);
+        chips.push(`<span class="chip">÷${it.factorUsed}${it.avifQ != null ? ` · AVIF q${it.avifQ}` : ""}</span>`);
         if (!it.exact) chips.push(`<span class="chip warn">Rounded to nearest px</span>`);
       }
       if (it.status === "working" || it.status === "queued") chips.push('<span class="chip neutral">Resizing…</span>');
@@ -662,6 +714,16 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     state.factor = Number(r.value);
     if (state.items.length) processAll(state.items);
   }));
+  document.querySelectorAll('input[name="format"]').forEach((r) => r.addEventListener("change", () => {
+    state.format = r.value;
+    $("quality-wrap").hidden = state.format !== "avif";
+    if (state.items.length) processAll(state.items);
+  }));
+  $("quality").addEventListener("input", (e) => { $("quality-out").textContent = e.target.value; });
+  $("quality").addEventListener("change", (e) => {
+    state.quality = Number(e.target.value);
+    if (state.items.some((i) => i.ext === "avif" || state.format === "avif")) processAll(state.items);
+  });
   $("sharpen").addEventListener("change", (e) => {
     state.sharpen = e.target.checked;
     if (state.items.length) processAll(state.items);
