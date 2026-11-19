@@ -60,7 +60,7 @@ figma.ui.onmessage = async (msg) => {
       if (currentRun !== run) return; // cancelled or replaced by a newer run
       const node = await figma.getNodeByIdAsync(id);
       if (!exportable(node)) {
-        figma.ui.postMessage({ type: "export-error", id, gen: run, message: "This layer can't be resized" });
+        figma.ui.postMessage({ type: "export-error", id, gen: run, message: "This layer can't be exported" });
         continue;
       }
       try {
