@@ -47,7 +47,9 @@ onSelectionChange();
 let currentRun = null;
 
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === "deselect") {
+  if (msg.type === "resize") {
+    figma.ui.resize(380, Math.max(60, Math.min(800, Math.round(msg.height))));
+  } else if (msg.type === "deselect") {
     figma.currentPage.selection = figma.currentPage.selection.filter((n) => n.id !== msg.id);
   } else if (msg.type === "cancel") {
     currentRun = null;
