@@ -71,7 +71,7 @@ body {
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
 }
 .wrap {
-  max-width: 960px; margin: 0 auto;
+  max-width: 1200px; margin: 0 auto;
   padding-block: 40px 64px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -142,7 +142,11 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .quality input[type="range"]::-moz-range-progress { height: 4px; border-radius: 9999px; background: var(--accent); }
 .quality input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 0; border-radius: 50%; background: var(--accent); }
 .quality input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--accent); }
-.quality input[type="range"] { width: 64px; }
+.quality input[type="range"] { width: 160px; }
+/* When the Format group wraps onto its own line, the quality pill and its slider stretch to fill that line */
+.fmt-group.stretch { flex: 1 1 100%; }
+.fmt-group.stretch .quality { flex: 1 1 auto; }
+.fmt-group.stretch .quality input[type="range"] { flex: 1 1 auto; width: auto; min-width: 64px; }
 .quality input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
 /* Quality help: "?" button with a tooltip of suggested values (hover, keyboard focus or tap) */
@@ -348,7 +352,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       <div class="label">Finish</div>
       <label class="toggle"><input type="checkbox" id="sharpen" checked> Light sharpening</label>
     </div>
-    <div>
+    <div class="fmt-group" id="fmt-group">
       <div class="label" id="format-label">Format</div>
       <div class="format-row">
         <div class="seg" role="radiogroup" aria-labelledby="format-label">
@@ -867,8 +871,17 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
     place(false);
     return () => place(false);
   }
+  // Stretch the quality slider only when the Format group (or the quality pill) has wrapped onto its own line.
+  function fitFormatRow() {
+    const group = $("fmt-group"), first = document.querySelector(".controls > div");
+    group.classList.remove("stretch");
+    const seg = group.querySelector(".seg"), q = $("quality-wrap");
+    const wrapped = group.offsetTop > first.offsetTop + 4 || q.offsetTop > seg.offsetTop + 4;
+    group.classList.toggle("stretch", wrapped);
+  }
   const segRelayout = Array.from(document.querySelectorAll(".seg")).map(setupSeg);
-  const relayoutSegs = () => segRelayout.forEach((f) => f());
+  const relayoutSegs = () => { fitFormatRow(); segRelayout.forEach((f) => f()); };
+  fitFormatRow();
   window.addEventListener("resize", relayoutSegs);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayoutSegs);
   // A hidden control has no size yet; place its pill once it becomes visible.
