@@ -143,11 +143,17 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .quality input[type="range"]::-moz-range-progress { height: 4px; border-radius: 9999px; background: var(--accent); }
 .quality input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 0; border-radius: 50%; background: var(--accent); }
 .quality input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--accent); }
-.quality input[type="range"] { width: 96px; }
+.quality input[type="range"] { width: 80px; }
 .quality input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
 /* Quality help: "?" button with a tooltip of suggested values (hover, keyboard focus or tap) */
 .quality { position: relative; z-index: 5; }
+/* AVIF quality stays in place; dimmed and locked while Original/PNG is selected so nothing shifts */
+.quality label[for="quality"], .quality input[type="range"], .quality output { transition: opacity .18s ease-in-out; }
+.quality.off label[for="quality"], .quality.off input[type="range"], .quality.off output { opacity: .4; }
+.quality.off input[type="range"] { cursor: not-allowed; }
+.qtip .qtip-off { display: none; margin: 8px 0 0; color: var(--fg2); }
+.quality.off .qtip .qtip-off { display: block; }
 .qhelp {
   width: 18px; height: 18px; padding: 0; flex: none; display: inline-grid; place-items: center;
   border-radius: 50%; border: 1px solid var(--gp-white-30); background: transparent;
@@ -336,11 +342,11 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
           <input type="radio" name="format" id="fmt-orig" value="original" checked><label for="fmt-orig">Original</label>
           <input type="radio" name="format" id="fmt-avif" value="avif"><label for="fmt-avif">AVIF</label>
         </div>
-        <div class="quality" id="quality-wrap" hidden>
-          <label for="quality">Quality</label>
-          <input type="range" id="quality" min="0" max="100" step="1" value="50">
+        <div class="quality off" id="quality-wrap">
+          <label for="quality">AVIF quality</label>
+          <input type="range" id="quality" min="0" max="100" step="1" value="50" disabled>
           <output id="quality-out" for="quality">50</output>
-          <span class="qhelp-wrap"><button type="button" class="qhelp" id="qhelp" aria-label="Which quality should I use?" aria-describedby="qtip" aria-expanded="false">?</button><span class="qtip" id="qtip" role="tooltip"><p>Higher keeps more detail but makes a bigger file.</p><dl><dt>50</dt><dd>Good default for most images</dd><dt>60–75</dt><dd>Text, icons, logos or fine detail</dd><dt>30–45</dt><dd>Large photos and backgrounds</dd></dl></span></span>
+          <span class="qhelp-wrap"><button type="button" class="qhelp" id="qhelp" aria-label="Which quality should I use?" aria-describedby="qtip" aria-expanded="false">?</button><span class="qtip" id="qtip" role="tooltip"><p>Higher keeps more detail but makes a bigger file.</p><dl><dt>50</dt><dd>Good default for most images</dd><dt>60–75</dt><dd>Text, icons, logos or fine detail</dd><dt>30–45</dt><dd>Large photos and backgrounds</dd></dl><p class="qtip-off">Pick AVIF to use this.</p></span></span>
         </div>
       </div>
     </div>
@@ -797,7 +803,7 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
   }));
   document.querySelectorAll('input[name="format"]').forEach((r) => r.addEventListener("change", () => {
     state.format = r.value;
-    $("quality-wrap").hidden = state.format !== "avif";
+    $("quality-wrap").classList.toggle("off", state.format !== "avif"); $("quality").disabled = state.format !== "avif";
     if (state.items.length) processAll(state.items);
   }));
   // Quality help: tap or click toggles the tooltip; Escape or a click elsewhere closes it
