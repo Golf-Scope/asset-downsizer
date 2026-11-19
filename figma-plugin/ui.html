@@ -46,9 +46,8 @@ header.top { flex: none; display: flex; justify-content: space-between; align-it
   border: 0; border-radius: 50%; background: transparent; color: var(--fg2);
 }
 .collapse:hover:not(:disabled) { background: var(--gp-white-10); color: var(--fg1); }
-.collapse svg { display: block; }
-.collapse .i-max, body.collapsed .collapse .i-min { display: none; }
-body.collapsed .collapse .i-max { display: block; }
+.collapse svg { display: block; transition: transform .18s ease-in-out; }
+body.collapsed .collapse svg { transform: rotate(180deg); }
 /* Collapsed: just the title bar and the bottom bar */
 body.collapsed main, body.collapsed .sub { display: none; }
 body.collapsed header.top { padding: 12px 16px; align-items: center; }
@@ -240,7 +239,7 @@ button.primary:hover:not(:disabled) { background: #fff; }
     <h1>Asset Downsizer</h1>
     <p class="sub">Exports selected layers at 4x and downsizes them to sharp 1x PNG or AVIF files.</p>
   </div>
-  <button type="button" class="collapse" id="collapse" aria-expanded="true" aria-label="Minimize window" title="Minimize"><!-- GOLF+ Web DS icon/minimize + icon/maximize --><svg class="i-min" viewBox="0 0 64 64" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M38 59V46C38 41.5817 41.5817 38 46 38L59 38C59.5523 38 60 38.4477 60 39V44C60 44.5523 59.5523 45 59 45L47 45C45.8954 45 45 45.8954 45 47V59C45 59.5523 44.5523 60 44 60H39C38.4477 60 38 59.5523 38 59Z"/><path d="M38 5V18C38 22.4183 41.5817 26 46 26L59 26C59.5523 26 60 25.5523 60 25V20C60 19.4477 59.5523 19 59 19L47 19C45.8954 19 45 18.1046 45 17V5C45 4.44772 44.5523 4 44 4H39C38.4477 4 38 4.44772 38 5Z"/><path d="M26 59V46C26 41.5817 22.4183 38 18 38L5 38C4.44772 38 4 38.4477 4 39V44C4 44.5523 4.44772 45 5 45L17 45C18.1046 45 19 45.8954 19 47V59C19 59.5523 19.4477 60 20 60H25C25.5523 60 26 59.5523 26 59Z"/><path d="M26 5V18C26 22.4183 22.4183 26 18 26L5 26C4.44772 26 4 25.5523 4 25V20C4 19.4477 4.44772 19 5 19L17 19C18.1046 19 19 18.1046 19 17V5C19 4.44772 19.4477 4 20 4H25C25.5523 4 26 4.44772 26 5Z"/></svg><svg class="i-max" viewBox="0 0 64 64" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4 25V12C4 7.58172 7.58172 4 12 4H25C25.5523 4 26 4.44772 26 5V10C26 10.5523 25.5523 11 25 11H13C11.8954 11 11 11.8954 11 13V25C11 25.5523 10.5523 26 10 26H5C4.44772 26 4 25.5523 4 25Z"/><path d="M39 4L52 4C56.4183 4 60 7.58172 60 12V25C60 25.5523 59.5523 26 59 26H54C53.4477 26 53 25.5523 53 25V13C53 11.8954 52.1046 11 51 11L39 11C38.4477 11 38 10.5523 38 10V5C38 4.44772 38.4477 4 39 4Z"/><path d="M25 60H12C7.58172 60 4 56.4183 4 52L4 39C4 38.4477 4.44771 38 5 38H10C10.5523 38 11 38.4477 11 39L11 51C11 52.1046 11.8954 53 13 53H25C25.5523 53 26 53.4477 26 54V59C26 59.5523 25.5523 60 25 60Z"/><path d="M60 39V52C60 56.4183 56.4183 60 52 60L39 60C38.4477 60 38 59.5523 38 59V54C38 53.4477 38.4477 53 39 53L51 53C52.1046 53 53 52.1046 53 51V39C53 38.4477 53.4477 38 54 38H59C59.5523 38 60 38.4477 60 39Z"/></svg></button>
+  <button type="button" class="collapse" id="collapse" aria-expanded="true" aria-label="Collapse window" title="Collapse"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 10 4-4 4 4"/></svg></button>
 </header>
 <main>
 
@@ -717,8 +716,8 @@ button.primary:hover:not(:disabled) { background: #fff; }
     document.body.classList.toggle("collapsed", collapsed);
     const btn = $("collapse");
     btn.setAttribute("aria-expanded", String(!collapsed));
-    btn.setAttribute("aria-label", collapsed ? "Maximize window" : "Minimize window");
-    btn.title = collapsed ? "Maximize" : "Minimize";
+    btn.setAttribute("aria-label", collapsed ? "Expand window" : "Collapse window");
+    btn.title = collapsed ? "Expand" : "Collapse";
     const height = collapsed ? document.querySelector("header.top").offsetHeight + document.querySelector("footer").offsetHeight : FULL_HEIGHT;
     post({ type: "resize", height });
   });
