@@ -483,9 +483,21 @@ button.primary:hover:not(:disabled) { background: var(--gp-white); background-cl
       avifEncoder = (async () => {
         const mod = await import(AVIF_BASE + "encode.js/+esm");
         // The multi-threaded build is only used on cross-origin-isolated pages; match the wasm to it.
-        const wasmUrl = AVIF_BASE + (self.crossOriginIsolated ? "codec/enc/avif_enc_mt.wasm" : "codec/enc/avif_enc.wasm");
-        const res = await fetch(wasmUrl);
-        const wasm = WebAssembly.compileStreaming ? await WebAssembly.compileStreaming(res) : await WebAssembly.compile(await res.arrayBuffer());
+        // The encoder file is hosted next to this page (avif_enc.wasm) because some hosts, like Claude, block
+        // fetching it from the CDN. The CDN copy is the fallback.
+        const urls = self.crossOriginIsolated
+          ? [AVIF_BASE + "codec/enc/avif_enc_mt.wasm"]
+          : [new URL("avif_enc.wasm", location.href).href, AVIF_BASE + "codec/enc/avif_enc.wasm"];
+        let wasm = null, lastErr;
+        for (const url of urls) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            wasm = await WebAssembly.compile(await res.arrayBuffer());
+            break;
+          } catch (e) { lastErr = e; }
+        }
+        if (!wasm) throw lastErr;
         await mod.init(wasm);
         return mod.default;
       })();
