@@ -84,8 +84,8 @@ header h1 {
 }
 header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 
-/* One row at full width: first group on the drop zone's left edge, Format on its right edge */
-.controls { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; justify-content: space-between; }
+/* One left-aligned row of control groups (the 960px column leaves room for the 4x → 1x labels) */
+.controls { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
 .label { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--fg2); margin-bottom: 8px; }
 
 /* Segmented control: pill outer, pearl selected segment with black text */
