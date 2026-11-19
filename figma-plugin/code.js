@@ -15,7 +15,7 @@ function sendSelection() {
     width: Math.round(n.width),
     height: Math.round(n.height),
   }));
-  figma.ui.postMessage({ type: "selection", items });
+  figma.ui.postMessage({ type: "selection", items, page: figma.currentPage.name });
 }
 
 // Small previews of the selected layers (about 64px on the long side at 2x), sent one at a time after the list.
@@ -42,6 +42,7 @@ function schedulePreviews() {
 
 function onSelectionChange() { sendSelection(); schedulePreviews(); }
 figma.on("selectionchange", onSelectionChange);
+figma.on("currentpagechange", onSelectionChange); // keeps the page name (used for the zip name) current
 onSelectionChange();
 
 let currentRun = null;

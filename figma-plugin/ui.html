@@ -572,6 +572,7 @@ button.primary:hover:not(:disabled) { background: #fff; }
       const added = msg.items.filter((i) => !prevIds.has(i.id));
       const kept = state.selection.filter((x) => byId.has(x.id)).map((x) => byId.get(x.id));
       state.selection = [...added, ...kept];
+      if (msg.page) state.pageName = msg.page;
       state.justAdded = prevIds.size ? new Set(added.map((i) => i.id)) : new Set();
       renderSelection();
       // If the panel is scrolled past the top of the list, bring the new layers into view.
@@ -780,7 +781,10 @@ button.primary:hover:not(:disabled) { background: #fff; }
     if (!window.JSZip) { status("The zip helper didn't load. Download the files one at a time", true); return; }
     const zip = new JSZip(); const names = uniqueNames(done);
     done.forEach((r, i) => zip.file(names[i], r.blob));
-    saveBlob(`assets-1x-${new Date().toISOString().slice(0, 10)}.zip`, await zip.generateAsync({ type: "blob" }));
+    // Name the zip after the Figma page the layers came from (falls back to a dated name).
+    const fallback = `assets-1x-${new Date().toISOString().slice(0, 10)}`;
+    const zipBase = state.pageName ? cleanBase(state.pageName.replace(/\s+/g, " "), fallback).replace(/^[-.\s]+|[-.\s]+$/g, "") || fallback : fallback;
+    saveBlob(`${zipBase}.zip`, await zip.generateAsync({ type: "blob" }));
   }
 
   document.querySelectorAll('input[name="format"]').forEach((r) => r.addEventListener("change", () => {
