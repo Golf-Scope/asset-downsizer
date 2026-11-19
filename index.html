@@ -91,7 +91,7 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 /* Segmented control: pill outer, pearl selected segment with black text */
 .seg {
   display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--radius-pill);
-  background: var(--gp-white-10); backdrop-filter: blur(43px); -webkit-backdrop-filter: blur(43px);
+  background: var(--gp-white-10);
 }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label {
@@ -131,7 +131,6 @@ header p { margin: 0; color: var(--fg2); max-width: 62ch; }
 .quality {
   height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
   border-radius: var(--radius-pill); background: var(--gp-white-10);
-  backdrop-filter: blur(43px); -webkit-backdrop-filter: blur(43px);
   font-weight: 700; font-size: 15px; color: var(--fg2);
 }
 .quality output { color: var(--fg1); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
